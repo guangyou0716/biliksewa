@@ -1,9 +1,11 @@
 import { addDays, monthOf, monthRange } from '../dates';
 import { hashPassword } from './auth';
 import type { DB } from './db/client';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { settleDeposit } from './deposit';
-import { tenancy, tenant, user } from './db/schema';
+import { DEMO_METER_PHOTO } from './demo-photo';
+import { recordReading, setMeterRate } from './meter';
+import { meterReading, room, tenancy, tenant, user } from './db/schema';
 import {
 	addBed,
 	addProperty,
@@ -138,6 +140,38 @@ export async function seedDemo(db: DB, today: string) {
 		toDate: addDays(lastRange.endExclusive, -1),
 		dueDate: `${thisMonth}-07`
 	});
+
+	// Rumah Mawar has room sub-meters billed at RM 0.55/kWh (Teres Cempaka has them off).
+	setMeterRate(db, o, mawar.id, 5500);
+	const mawarRoom = (name: string) =>
+		db
+			.select({ id: room.id })
+			.from(room)
+			.where(and(eq(room.propertyId, mawar.id), eq(room.name, name)))
+			.get()!.id;
+	const master = mawarRoom('Master room');
+	const middle = mawarRoom('Middle room');
+	const meterAt = (roomId: number, readOn: string, readingTenths: number) =>
+		recordReading(db, o, roomId, { readOn, readingTenths }, today);
+	// Opening readings when the tenants moved in, then last month's reading of the master room.
+	meterAt(master, start2, 20000);
+	meterAt(master, `${lastMonth}-01`, 22100);
+	// Middle room: read when Priya moved in, so Tan pays for the weeks he was alone in it.
+	meterAt(middle, start2, 15200);
+	meterAt(middle, midLast, 17026);
+	// Aina sent this month's reading (with a photo); it waits for the landlord.
+	db.insert(meterReading)
+		.values({
+			roomId: master,
+			tenancyId: t['Aina Sofea'],
+			readOn: `${thisMonth}-01`,
+			readingTenths: 24055,
+			status: 'pending',
+			submittedAt: new Date(`${thisMonth}-01T09:00:00+08:00`),
+			photoType: 'image/png',
+			photo: DEMO_METER_PHOTO
+		})
+		.run();
 
 	// Everyone paid the month before last; last month a few are behind.
 	const pay = (

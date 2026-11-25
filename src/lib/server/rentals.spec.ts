@@ -352,7 +352,8 @@ describe('ledger and dashboard', () => {
 		expect(d.occupied).toBe(6);
 		expect(d.vacant).toBe(4);
 		expect(d.billedSen).toBeGreaterThan(0);
-		expect(d.collectedSen).toBe(76424 + 43951);
+		// Aina settles everything on the 1st, including 210 kWh of electricity at RM 0.55 (RM 115.50).
+		expect(d.collectedSen).toBe(76424 + 11550 + 43951);
 		const tenancies = listTenancies(db, ownerId, '2026-11-25');
 		expect(d.outstandingSen).toBe(tenancies.reduce((s, t) => s + Math.max(0, t.balanceSen), 0));
 		expect(d.overdue.length).toBeGreaterThan(0);
