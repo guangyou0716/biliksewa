@@ -28,6 +28,17 @@ export function month(data: FormData, key: string): string {
 	return v;
 }
 
+/**
+ * The `?month=YYYY-MM` query parameter, or `fallback` when it is missing. A malformed month is a 400
+ * rather than a silent fallback, so a bookmarked statement link never shows the wrong month.
+ */
+export function monthParam(url: URL, fallback: string): string {
+	const v = url.searchParams.get('month');
+	if (v === null || v === '') return fallback;
+	if (!isIsoMonth(v)) error(400, 'Month must look like 2026-11');
+	return v;
+}
+
 export function id(value: string | null | undefined): number {
 	const n = Number(value);
 	if (!Number.isSafeInteger(n) || n <= 0) error(404, 'Not found');
@@ -58,4 +69,15 @@ export async function guard<T>(data: FormData, run: () => T | Promise<T>) {
 		}
 		throw e;
 	}
+}
+
+/** A CSV download that is never cached. */
+export function csvResponse(body: string, fileName: string): Response {
+	return new Response(body, {
+		headers: {
+			'content-type': 'text/csv; charset=utf-8',
+			'content-disposition': `attachment; filename="${fileName}"`,
+			'cache-control': 'private, no-store'
+		}
+	});
 }

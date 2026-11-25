@@ -39,6 +39,16 @@ await page.goto(`${base}/meters`);
 await page.getByRole('article', { name: /Reading from/ }).waitFor();
 await page.screenshot({ path: 'docs/meter-readings.png', fullPage: true });
 
+// Overdue reminders with copyable messages, and a monthly statement (demo data: Tan is behind).
+await page.goto(`${base}/reminders`);
+await page.getByRole('article').first().waitFor();
+await page.screenshot({ path: 'docs/overdue-reminders.png', fullPage: true });
+await page.goto(`${base}/tenancies`);
+await page.getByRole('link', { name: 'Tan Wei Jie' }).click();
+await page.getByRole('link', { name: 'Monthly statement' }).click();
+await page.getByRole('heading', { name: /Monthly statement/ }).waitFor();
+await page.screenshot({ path: 'docs/monthly-statement.png', fullPage: true });
+
 const tenant = await browser.newPage({
 	viewport: { width: 1280, height: 860 },
 	deviceScaleFactor: 1
@@ -52,5 +62,5 @@ await tenant.screenshot({ path: 'docs/tenant-portal.png', fullPage: true });
 
 await browser.close();
 console.log(
-	'Saved docs/dashboard.png, docs/property-board.png, docs/bill-split.png, docs/tenant-portal.png, docs/deposit-settlement.png, docs/meter-readings.png'
+	'Saved docs/dashboard.png, docs/property-board.png, docs/bill-split.png, docs/tenant-portal.png, docs/deposit-settlement.png, docs/meter-readings.png, docs/overdue-reminders.png, docs/monthly-statement.png'
 );

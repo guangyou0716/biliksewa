@@ -40,7 +40,12 @@
 
 <div class="mt-6 grid gap-6 lg:grid-cols-3">
 	<section class="card lg:col-span-2" aria-labelledby="overdue-h">
-		<h2 id="overdue-h" class="font-semibold">Overdue</h2>
+		<div class="flex items-baseline justify-between gap-3">
+			<h2 id="overdue-h" class="font-semibold">Overdue</h2>
+			{#if s.overdue.length}
+				<a class="text-sm text-brand-700 hover:underline" href="/reminders">Reminders →</a>
+			{/if}
+		</div>
 		{#if s.overdue.length === 0}
 			<p class="mt-3 text-sm text-slate-500">Nobody is overdue. 🎉</p>
 		{:else}

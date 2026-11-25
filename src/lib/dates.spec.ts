@@ -6,6 +6,7 @@ import {
 	isIsoMonth,
 	monthRange,
 	overlapNights,
+	shiftMonth,
 	staysOverlap
 } from './dates';
 
@@ -53,5 +54,15 @@ describe('staysOverlap', () => {
 	it('detects overlap with an open-ended stay', () => {
 		expect(staysOverlap('2026-01-01', null, '2026-12-01', null)).toBe(true);
 		expect(staysOverlap('2026-12-01', null, '2026-01-01', '2026-12-02')).toBe(true);
+	});
+});
+
+describe('shiftMonth', () => {
+	it('moves across year boundaries both ways', () => {
+		expect(shiftMonth('2026-11', 1)).toBe('2026-12');
+		expect(shiftMonth('2026-12', 1)).toBe('2027-01');
+		expect(shiftMonth('2026-01', -1)).toBe('2025-12');
+		expect(shiftMonth('2026-03', -14)).toBe('2025-01');
+		expect(shiftMonth('2026-05', 0)).toBe('2026-05');
 	});
 });

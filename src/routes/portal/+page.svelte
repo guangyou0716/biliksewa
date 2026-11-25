@@ -44,6 +44,9 @@
 				hint={s.overdueSen > 0 ? `${formatRM(s.overdueSen)} overdue` : 'Nothing overdue'}
 			/>
 		</div>
+		<p>
+			<a class="btn-secondary" href="/portal/statements/{s.tenancy.id}">Monthly statement</a>
+		</p>
 		<MeterCard tenancyId={s.tenancy.id} active={s.active} today={data.today} meter={s.meter} />
 		<Ledger
 			charges={s.charges}

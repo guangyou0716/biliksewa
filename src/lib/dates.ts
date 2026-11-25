@@ -72,3 +72,10 @@ export function staysOverlap(
 export function monthOf(date: string): string {
 	return date.slice(0, 7);
 }
+
+/** `period` moved by `n` months (negative = earlier): shiftMonth('2026-01', -1) = '2025-12'. */
+export function shiftMonth(period: string, n: number): string {
+	const [y, m] = period.split('-').map(Number);
+	const total = y * 12 + (m - 1) + n;
+	return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`;
+}

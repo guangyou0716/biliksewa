@@ -41,6 +41,20 @@ change the demo data, and it goes back to the sample data every hour.
 - **Tenant ledger**: charges, payments (recorded by hand, no payment gateway), balance and overdue amount.
   Payments are applied to the oldest charge first.
 - **Dashboard**: occupancy, billed and collected this month, outstanding, and the overdue list.
+- **Receipts and monthly statements**: every payment has a printable receipt (`R-000123`) for both the
+  landlord and the tenant. A monthly statement per tenancy shows the balance brought forward, the month's
+  charges (by billing month) and payments (by date paid) with a running balance, and the balance carried
+  forward. Print it or save it as PDF from the browser's print dialog (navigation is hidden in print), or
+  download it as one self-contained HTML file (inline styles, no scripts, no external requests). There is
+  no PDF library on purpose: the same code works on Node and in the Cloudflare Worker demo. Tenants open
+  only their own statements; anything else is a 404.
+- **CSV export** of charges (with what is still unpaid on each) and payments (with receipt numbers) for one
+  month or all months, for Excel, Google Sheets or an accountant. Amounts are plain decimals from integer
+  sen. Text cells starting with `=`, `+`, `-`, `@`, tab or carriage return are prefixed with `'` so a name
+  like `=HYPERLINK(...)` can't run as a spreadsheet formula.
+- **Overdue reminders**: who owes what, charge by charge, with days overdue (payments applied oldest first;
+  moved-out tenants who still owe are included) and a ready-made polite reminder message to copy into
+  WhatsApp, SMS or email. biliksewa never sends anything itself.
 - **Tenant portal**: the landlord creates a one-time invite link (valid 7 days, copy or share on WhatsApp).
   The tenant picks a password and then sees only their own stay, charges, payments and printable payment
   receipts. Landlord pages are closed to tenant accounts, and another tenant's receipt is a 404, the same as
@@ -55,6 +69,8 @@ change the demo data, and it goes back to the sample data every hour.
 ![Tenant portal](docs/tenant-portal.png)
 ![Deposit settlement](docs/deposit-settlement.png)
 ![Meter readings](docs/meter-readings.png)
+![Overdue reminders](docs/overdue-reminders.png)
+![Monthly statement](docs/monthly-statement.png)
 
 ## Stack
 
