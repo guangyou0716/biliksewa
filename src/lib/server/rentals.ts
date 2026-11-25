@@ -2,10 +2,11 @@ import { and, asc, eq, gt, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm
 import { allocatePayments, overdueSen, proratedRent, splitByNights } from '../billing';
 import { addDays, monthOf, monthRange, overlapNights, staysOverlap } from '../dates';
 import type { DB } from './db/client';
+import { UserError } from './errors';
 import { bed, charge, payment, property, room, tenancy, tenant, utilityBill } from './db/schema';
 
 /** Thrown for user-facing validation problems; routes turn it into a 400 form error. */
-export class RentalError extends Error {}
+export class RentalError extends UserError {}
 
 // ---------- ownership guards (every read/write is scoped to the signed-in landlord) ----------
 
@@ -15,7 +16,7 @@ function ownedProperty(db: DB, ownerId: number, propertyId: number) {
 		.from(property)
 		.where(and(eq(property.id, propertyId), eq(property.ownerId, ownerId)))
 		.get();
-	if (!row) throw new RentalError('Property not found');
+	if (!row) throw new RentalError('err.propertyNotFound');
 	return row;
 }
 
@@ -26,7 +27,7 @@ function ownedRoom(db: DB, ownerId: number, roomId: number) {
 		.innerJoin(property, eq(room.propertyId, property.id))
 		.where(and(eq(room.id, roomId), eq(property.ownerId, ownerId)))
 		.get();
-	if (!row) throw new RentalError('Room not found');
+	if (!row) throw new RentalError('err.roomNotFound');
 	return row.room;
 }
 
@@ -38,7 +39,7 @@ function ownedBed(db: DB, ownerId: number, bedId: number) {
 		.innerJoin(property, eq(room.propertyId, property.id))
 		.where(and(eq(bed.id, bedId), eq(property.ownerId, ownerId)))
 		.get();
-	if (!row) throw new RentalError('Bed not found');
+	if (!row) throw new RentalError('err.bedNotFound');
 	return row;
 }
 
@@ -52,7 +53,7 @@ export function ownedTenancy(db: DB, ownerId: number, tenancyId: number) {
 		.innerJoin(property, eq(room.propertyId, property.id))
 		.where(and(eq(tenancy.id, tenancyId), eq(property.ownerId, ownerId)))
 		.get();
-	if (!row) throw new RentalError('Tenancy not found');
+	if (!row) throw new RentalError('err.tenancyNotFound');
 	return row;
 }
 
@@ -61,20 +62,20 @@ export function ownedTenancy(db: DB, ownerId: number, tenancyId: number) {
 export function addProperty(db: DB, ownerId: number, input: { name: string; area: string }) {
 	const name = input.name.trim();
 	const area = input.area.trim();
-	if (!name || !area) throw new RentalError('Name and area are required');
+	if (!name || !area) throw new RentalError('err.nameAreaRequired');
 	return db.insert(property).values({ ownerId, name, area }).returning().get();
 }
 
 export function addRoom(db: DB, ownerId: number, propertyId: number, name: string) {
 	ownedProperty(db, ownerId, propertyId);
 	const trimmed = name.trim();
-	if (!trimmed) throw new RentalError('Room name is required');
+	if (!trimmed) throw new RentalError('err.roomNameRequired');
 	const clash = db
 		.select({ id: room.id })
 		.from(room)
 		.where(and(eq(room.propertyId, propertyId), eq(room.name, trimmed)))
 		.get();
-	if (clash) throw new RentalError(`Room "${trimmed}" already exists`);
+	if (clash) throw new RentalError('err.roomExists', { name: trimmed });
 	return db.insert(room).values({ propertyId, name: trimmed }).returning().get();
 }
 
@@ -86,14 +87,14 @@ export function addBed(
 ) {
 	ownedRoom(db, ownerId, roomId);
 	const label = input.label.trim();
-	if (!label) throw new RentalError('Bed label is required');
-	if (!(input.defaultRentSen > 0)) throw new RentalError('Rent must be more than RM 0');
+	if (!label) throw new RentalError('err.bedLabelRequired');
+	if (!(input.defaultRentSen > 0)) throw new RentalError('err.rentPositive');
 	const clash = db
 		.select({ id: bed.id })
 		.from(bed)
 		.where(and(eq(bed.roomId, roomId), eq(bed.label, label)))
 		.get();
-	if (clash) throw new RentalError(`Bed "${label}" already exists in this room`);
+	if (clash) throw new RentalError('err.bedExists', { label });
 	return db
 		.insert(bed)
 		.values({ roomId, label, defaultRentSen: input.defaultRentSen })
@@ -200,14 +201,14 @@ export function moveIn(
 ) {
 	ownedBed(db, ownerId, input.bedId);
 	const name = input.tenantName.trim();
-	if (!name) throw new RentalError('Tenant name is required');
-	if (!(input.monthlyRentSen > 0)) throw new RentalError('Rent must be more than RM 0');
-	if (input.depositSen < 0) throw new RentalError('Deposit cannot be negative');
+	if (!name) throw new RentalError('err.tenantNameRequired');
+	if (!(input.monthlyRentSen > 0)) throw new RentalError('err.rentPositive');
+	if (input.depositSen < 0) throw new RentalError('err.depositNegative');
 
 	return db.transaction((tx) => {
 		const existing = tx.select().from(tenancy).where(eq(tenancy.bedId, input.bedId)).all();
 		const clash = existing.find((t) => staysOverlap(t.startDate, t.endDate, input.startDate, null));
-		if (clash) throw new RentalError('This bed is already taken on or after that date');
+		if (clash) throw new RentalError('err.bedTaken');
 		const t = tx
 			.insert(tenant)
 			.values({ ownerId, name, email: input.tenantEmail?.trim() || null })
@@ -245,8 +246,8 @@ export interface UtilityAdjustment {
  */
 export function moveOut(db: DB, ownerId: number, tenancyId: number, endDate: string) {
 	const { tenancy: t } = ownedTenancy(db, ownerId, tenancyId);
-	if (t.endDate) throw new RentalError('Tenant has already moved out');
-	if (endDate <= t.startDate) throw new RentalError('Move-out must be after the move-in date');
+	if (t.endDate) throw new RentalError('err.alreadyMovedOut');
+	if (endDate <= t.startDate) throw new RentalError('err.moveOutAfterMoveIn');
 	return db.transaction((tx) => {
 		tx.update(tenancy).set({ endDate }).where(eq(tenancy.id, tenancyId)).run();
 		const rents = tx
@@ -421,7 +422,7 @@ export function recordPayment(
 	}
 ) {
 	ownedTenancy(db, ownerId, tenancyId);
-	if (!(input.amountSen > 0)) throw new RentalError('Payment must be more than RM 0');
+	if (!(input.amountSen > 0)) throw new RentalError('err.paymentPositive');
 	return db
 		.insert(payment)
 		.values({
@@ -506,20 +507,16 @@ export function previewUtilitySplit(
 	input: { propertyId: number; amountSen: number; fromDate: string; toDate: string }
 ) {
 	ownedProperty(db, ownerId, input.propertyId);
-	if (input.toDate < input.fromDate) throw new RentalError('Bill period ends before it starts');
-	if (!(input.amountSen > 0)) throw new RentalError('Bill amount must be more than RM 0');
+	if (input.toDate < input.fromDate) throw new RentalError('err.billPeriod');
+	if (!(input.amountSen > 0)) throw new RentalError('err.billPositive');
 	const toExclusive = addDays(input.toDate, 1);
 	const rows = ownerTenancies(db, ownerId, input.propertyId);
 	const stays = rows.map((r) => ({
 		id: r.tenancy.id,
 		nights: overlapNights(r.tenancy.startDate, r.tenancy.endDate, input.fromDate, toExclusive)
 	}));
-	let shares;
-	try {
-		shares = splitByNights(input.amountSen, stays);
-	} catch (e) {
-		throw new RentalError((e as Error).message);
-	}
+	if (!stays.some((s) => s.nights > 0)) throw new RentalError('err.nobodyStayed');
+	const shares = splitByNights(input.amountSen, stays);
 	const names = new Map(rows.map((r) => [r.tenancy.id, r.tenantName]));
 	return shares.map((s) => ({ ...s, tenantName: names.get(s.id) ?? '' }));
 }
@@ -537,7 +534,7 @@ export function splitUtilityBill(
 	}
 ) {
 	const label = input.label.trim();
-	if (!label) throw new RentalError('Bill label is required');
+	if (!label) throw new RentalError('err.billLabelRequired');
 	const shares = previewUtilitySplit(db, ownerId, input);
 	const duplicate = db
 		.select({ id: utilityBill.id })
@@ -552,7 +549,11 @@ export function splitUtilityBill(
 		)
 		.get();
 	if (duplicate)
-		throw new RentalError(`${label} for ${input.fromDate} to ${input.toDate} was already split`);
+		throw new RentalError('err.billAlreadySplit', {
+			label,
+			from: input.fromDate,
+			to: input.toDate
+		});
 	return db.transaction((tx) => {
 		const bill = tx
 			.insert(utilityBill)

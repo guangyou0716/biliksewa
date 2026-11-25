@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import FormMessage from '#lib/components/FormMessage.svelte';
+	import { t } from '#lib/i18n.svelte.ts';
 	import { formatRM } from '#lib/money.ts';
 	import type { PageProps } from './$types';
 
@@ -10,10 +11,10 @@
 
 <svelte:head><title>{board.property.name} · biliksewa</title></svelte:head>
 
-<a href="/properties" class="text-sm text-brand-700 hover:underline">← Properties</a>
+<a href="/properties" class="text-sm text-brand-700 hover:underline">{t('prop.back')}</a>
 <h1 class="mt-1 text-2xl font-semibold">{board.property.name}</h1>
 <p class="text-sm text-slate-500">
-	{board.property.area} · rent due on day {board.property.rentDueDay} of each month
+	{t('prop.dueDay', { area: board.property.area, day: board.property.rentDueDay })}
 </p>
 
 <div class="mt-4">
@@ -33,13 +34,13 @@
 						data-testid="bed"
 					>
 						<div class="flex items-center justify-between">
-							<span class="font-medium">Bed {b.label}</span>
+							<span class="font-medium">{t('common.bed', { label: b.label })}</span>
 							<span
 								class="badge {b.occupant
 									? 'bg-brand-100 text-brand-700'
 									: 'bg-slate-100 text-slate-600'}"
 							>
-								{b.occupant ? 'Occupied' : 'Vacant'}
+								{b.occupant ? t('prop.occupied') : t('prop.vacant')}
 							</span>
 						</div>
 						{#if b.occupant}
@@ -50,11 +51,18 @@
 								{b.occupant.tenantName}
 							</a>
 							<p class="text-xs text-slate-600">
-								{formatRM(b.occupant.rentSen)}/month · since {b.occupant.startDate}
+								{t('prop.rentSince', {
+									rent: formatRM(b.occupant.rentSen),
+									date: b.occupant.startDate
+								})}
 							</p>
 						{:else}
-							<p class="mt-2 text-xs text-slate-500">Asking {formatRM(b.defaultRentSen)}/month</p>
-							<a class="btn mt-2 px-3 py-1 text-xs" href="/tenancies/new?bed={b.id}">Move in</a>
+							<p class="mt-2 text-xs text-slate-500">
+								{t('prop.asking', { rent: formatRM(b.defaultRentSen) })}
+							</p>
+							<a class="btn mt-2 px-3 py-1 text-xs" href="/tenancies/new?bed={b.id}">
+								{t('prop.moveIn')}
+							</a>
 						{/if}
 					</li>
 				{/each}
@@ -62,28 +70,25 @@
 			<form method="POST" action="?/bed" use:enhance class="mt-4 flex flex-wrap items-end gap-3">
 				<input type="hidden" name="roomId" value={r.id} />
 				<label class="label">
-					Bed label <input class="field w-28" name="label" required placeholder="C" />
+					{t('prop.bedLabel')}
+					<input class="field w-28" name="label" required placeholder="C" />
 				</label>
 				<label class="label">
-					Rent (RM) <input
-						class="field w-32"
-						name="rent"
-						required
-						inputmode="decimal"
-						placeholder="350"
-					/>
+					{t('prop.rentRM')}
+					<input class="field w-32" name="rent" required inputmode="decimal" placeholder="350" />
 				</label>
-				<button class="btn-secondary">Add bed to {r.name}</button>
+				<button class="btn-secondary">{t('prop.addBed', { room: r.name })}</button>
 			</form>
 		</section>
 	{:else}
-		<p class="card text-sm text-slate-500">No rooms yet. Add the first room below.</p>
+		<p class="card text-sm text-slate-500">{t('prop.noRooms')}</p>
 	{/each}
 
 	<form method="POST" action="?/room" use:enhance class="card flex flex-wrap items-end gap-3">
 		<label class="label">
-			New room <input class="field" name="name" required placeholder="Room 4" />
+			{t('prop.newRoom')}
+			<input class="field" name="name" required placeholder="Room 4" />
 		</label>
-		<button class="btn">Add room</button>
+		<button class="btn">{t('prop.addRoom')}</button>
 	</form>
 </div>

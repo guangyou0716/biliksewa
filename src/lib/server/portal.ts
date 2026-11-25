@@ -38,7 +38,7 @@ export function portalAccess(db: DB, ownerId: number, tenancyId: number, now = D
  */
 export function createInvite(db: DB, ownerId: number, tenancyId: number, now = Date.now()) {
 	const { tenant: t } = ownedTenancy(db, ownerId, tenancyId);
-	if (t.userId) throw new RentalError('This tenant already has a portal account');
+	if (t.userId) throw new RentalError('err.hasPortal');
 	const token = randomBytes(32).toString('base64url');
 	const expiresAt = new Date(now + INVITE_DAYS * DAY_MS);
 	db.transaction((tx) => {
@@ -102,18 +102,18 @@ export async function acceptInvite(
 	now = Date.now()
 ): Promise<SessionUser> {
 	const email = input.email.trim().toLowerCase();
-	if (!EMAIL.test(email)) throw new RentalError('Enter a valid email address');
+	if (!EMAIL.test(email)) throw new RentalError('err.email');
 	if (input.password.length < MIN_PASSWORD_LENGTH)
-		throw new RentalError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-	if (!openInvite(db, token, now)) throw new RentalError('This invite link is no longer valid');
+		throw new RentalError('err.passwordShort', { min: MIN_PASSWORD_LENGTH });
+	if (!openInvite(db, token, now)) throw new RentalError('err.inviteInvalid');
 	const passwordHash = await hashPassword(input.password);
 
 	// Checked again inside one synchronous transaction, so a link cannot be used twice.
 	return db.transaction((tx) => {
 		const row = openInvite(tx, token, now);
-		if (!row) throw new RentalError('This invite link is no longer valid');
+		if (!row) throw new RentalError('err.inviteInvalid');
 		if (tx.select({ id: user.id }).from(user).where(eq(user.email, email)).get())
-			throw new RentalError('That email already has an account. Use another email.');
+			throw new RentalError('err.emailTaken');
 		const account = tx
 			.insert(user)
 			.values({ email, name: row.tenant.name, passwordHash, role: 'tenant' })
@@ -181,7 +181,7 @@ export function tenantReceipt(db: DB, userId: number, paymentId: number) {
 		.innerJoin(user, eq(property.ownerId, user.id))
 		.where(and(eq(payment.id, paymentId), eq(tenant.userId, userId)))
 		.get();
-	if (!row) throw new RentalError('Receipt not found');
+	if (!row) throw new RentalError('err.receiptNotFound');
 	return { ...row, number: receiptNumber(row.payment.id) };
 }
 

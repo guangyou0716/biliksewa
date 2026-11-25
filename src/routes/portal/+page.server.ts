@@ -18,14 +18,14 @@ export const actions: Actions = {
 		const data = await request.formData();
 		return guard(data, async () => {
 			const tenths = parseKwh(text(data, 'reading'));
-			if (tenths === null) throw new FormError('Reading: enter the kWh on the meter, like 1234.5');
+			if (tenths === null) throw new FormError('err.kwhInput');
 			const file = data.get('photo');
 			const r = submitReading(
 				db,
 				locals.user!.id,
 				id(text(data, 'tenancyId')),
 				{
-					readOn: date(data, 'readOn', 'Read on'),
+					readOn: date(data, 'readOn', 'field.readOn'),
 					readingTenths: tenths,
 					photo: await readPhoto(file instanceof File ? file : null)
 				},
