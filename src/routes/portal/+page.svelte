@@ -1,17 +1,23 @@
 <script lang="ts">
 	import DepositSummary from '#lib/components/DepositSummary.svelte';
+	import FormMessage from '#lib/components/FormMessage.svelte';
+	import MeterCard from '#lib/components/MeterCard.svelte';
 	import Ledger from '#lib/components/Ledger.svelte';
 	import Stat from '#lib/components/Stat.svelte';
 	import { formatRM } from '#lib/money.ts';
 	import type { PageProps } from './$types';
 
-	let { data }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 </script>
 
 <svelte:head><title>My rent · biliksewa</title></svelte:head>
 
 <h1 class="text-2xl font-semibold">Hi, {data.user.name}</h1>
 <p class="text-sm text-slate-500">Your rent, shared bills and payments.</p>
+
+<div class="mt-4">
+	<FormMessage error={form?.error} success={form && 'success' in form ? form.success : null} />
+</div>
 
 {#each data.stays as s (s.tenancy.id)}
 	<section class="mt-6 space-y-4" aria-label="Stay at {s.propertyName}">
@@ -38,6 +44,7 @@
 				hint={s.overdueSen > 0 ? `${formatRM(s.overdueSen)} overdue` : 'Nothing overdue'}
 			/>
 		</div>
+		<MeterCard tenancyId={s.tenancy.id} active={s.active} today={data.today} meter={s.meter} />
 		<Ledger
 			charges={s.charges}
 			payments={s.payments}

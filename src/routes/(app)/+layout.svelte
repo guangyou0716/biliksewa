@@ -8,7 +8,8 @@
 		{ href: '/', label: 'Dashboard' },
 		{ href: '/properties', label: 'Properties' },
 		{ href: '/tenancies', label: 'Tenants' },
-		{ href: '/billing', label: 'Billing' }
+		{ href: '/billing', label: 'Billing' },
+		{ href: '/meters', label: 'Meters' }
 	];
 	const active = (href: string) =>
 		href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);

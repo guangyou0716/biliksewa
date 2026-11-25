@@ -34,6 +34,11 @@ await page.getByRole('link', { name: 'Farah Hani' }).click();
 await page.getByRole('region', { name: /Deposit settled on/ }).waitFor();
 await page.screenshot({ path: 'docs/deposit-settlement.png', fullPage: true });
 
+// Room meter readings: Aina's reading waits for the landlord (demo data).
+await page.goto(`${base}/meters`);
+await page.getByRole('article', { name: /Reading from/ }).waitFor();
+await page.screenshot({ path: 'docs/meter-readings.png', fullPage: true });
+
 const tenant = await browser.newPage({
 	viewport: { width: 1280, height: 860 },
 	deviceScaleFactor: 1
@@ -47,5 +52,5 @@ await tenant.screenshot({ path: 'docs/tenant-portal.png', fullPage: true });
 
 await browser.close();
 console.log(
-	'Saved docs/dashboard.png, docs/property-board.png, docs/bill-split.png, docs/tenant-portal.png, docs/deposit-settlement.png'
+	'Saved docs/dashboard.png, docs/property-board.png, docs/bill-split.png, docs/tenant-portal.png, docs/deposit-settlement.png, docs/meter-readings.png'
 );

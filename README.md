@@ -27,6 +27,17 @@ change the demo data, and it goes back to the sample data every hour.
   a partial unique index in the database enforces this too.
 - **House bill split** (electricity, water, internet) by nights stayed, with a preview. Shares use the largest
   remainder method, so they add up to the bill exactly, to the sen. The same bill can't be split twice.
+- **Room electricity sub-meters**: the landlord sets a rate per property (RM per kWh, up to 4 decimals).
+  A tenant sends their room's meter reading from the portal, optionally with a photo; the landlord confirms
+  it or rejects it with a reason the tenant sees. A confirmed reading bills the kWh used since the room's
+  previous confirmed reading, rounded half up to the sen, and a shared room's charge is split by the nights
+  each tenant stayed in that period (exact to the sen). A reading can't go below the last confirmed one,
+  must be dated after it, and more than 60 kWh a day is refused as a likely typo. One reading waits per room
+  at a time. The first confirmed reading of a room only opens it; the landlord can also record readings
+  (e.g. at move-in). Tenants see their own submissions, the room's confirmed readings during their stay
+  and only their own share. Photos are checked by their bytes (JPEG, PNG or WebP, max 300 KB; the browser
+  shrinks phone photos first), stored in the database so the Cloudflare demo needs no extra storage, and
+  served only to the tenant who sent them and the landlord.
 - **Tenant ledger**: charges, payments (recorded by hand, no payment gateway), balance and overdue amount.
   Payments are applied to the oldest charge first.
 - **Dashboard**: occupancy, billed and collected this month, outstanding, and the overdue list.
@@ -43,6 +54,7 @@ change the demo data, and it goes back to the sample data every hour.
 ![Bill split](docs/bill-split.png)
 ![Tenant portal](docs/tenant-portal.png)
 ![Deposit settlement](docs/deposit-settlement.png)
+![Meter readings](docs/meter-readings.png)
 
 ## Stack
 

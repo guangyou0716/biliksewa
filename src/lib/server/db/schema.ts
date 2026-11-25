@@ -41,7 +41,12 @@ export const property = sqliteTable(
 		name: text('name').notNull(),
 		area: text('area').notNull(),
 		/** Day of month rent is due (1-28). */
-		rentDueDay: integer('rent_due_day').notNull().default(7)
+		rentDueDay: integer('rent_due_day').notNull().default(7),
+		/**
+		 * Electricity rate for room sub-meters in sen per kWh x 100 (RM 0.55/kWh = 5500).
+		 * Null = meter readings are off for this property.
+		 */
+		meterRate: integer('meter_rate')
 	},
 	(t) => [index('property_owner_idx').on(t.ownerId)]
 );
@@ -141,7 +146,9 @@ export const charge = sqliteTable(
 		/** Set on deductions (cleaning, repairs...) taken from the deposit at move-out. */
 		depositSettlementId: integer('deposit_settlement_id').references(
 			(): AnySQLiteColumn => depositSettlement.id
-		)
+		),
+		/** Set on the electricity charges billed from a confirmed room meter reading. */
+		meterReadingId: integer('meter_reading_id').references((): AnySQLiteColumn => meterReading.id)
 	},
 	(t) => [
 		index('charge_tenancy_idx').on(t.tenancyId),
@@ -200,3 +207,43 @@ export const depositSettlement = sqliteTable('deposit_settlement', {
 	refundReference: text('refund_reference'),
 	paymentId: integer('payment_id').references(() => payment.id)
 });
+
+/**
+ * A reading of a room's electricity sub-meter. Tenants submit readings (`pending`); the landlord confirms
+ * or rejects them with a reason. Readings the landlord takes are confirmed straight away. A confirmed
+ * reading bills the kWh used since the room's previous confirmed reading (stored here for the record).
+ * Readings are tenths of a kWh; the photo is a small validated image stored as base64.
+ */
+export const meterReading = sqliteTable(
+	'meter_reading',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		roomId: integer('room_id')
+			.notNull()
+			.references(() => room.id, { onDelete: 'cascade' }),
+		/** The submitting tenant's tenancy; null when the landlord took the reading. */
+		tenancyId: integer('tenancy_id').references(() => tenancy.id),
+		readOn: text('read_on').notNull(),
+		readingTenths: integer('reading_tenths').notNull(),
+		status: text('status', { enum: ['pending', 'confirmed', 'rejected'] }).notNull(),
+		rejectReason: text('reject_reason'),
+		photoType: text('photo_type', { enum: ['image/jpeg', 'image/png', 'image/webp'] }),
+		photo: text('photo'),
+		submittedAt: integer('submitted_at', { mode: 'timestamp_ms' }).notNull(),
+		decidedOn: text('decided_on'),
+		/** kWh used since the previous confirmed reading (tenths), the rate and the amount billed. */
+		usedTenths: integer('used_tenths'),
+		rate: integer('rate'),
+		amountSen: integer('amount_sen')
+	},
+	(t) => [
+		index('meter_reading_room_idx').on(t.roomId, t.readOn),
+		// One reading waiting per room, and one confirmed reading per room and day.
+		uniqueIndex('meter_reading_pending_uq')
+			.on(t.roomId)
+			.where(sql`${t.status} = 'pending'`),
+		uniqueIndex('meter_reading_confirmed_day_uq')
+			.on(t.roomId, t.readOn)
+			.where(sql`${t.status} = 'confirmed'`)
+	]
+);

@@ -11,6 +11,7 @@ import sveltekit from 'sveltekit-worker';
 import init from '../drizzle/0000_init.sql';
 import tenantPortal from '../drizzle/0001_tenant_portal.sql';
 import depositSettlement from '../drizzle/0002_deposit_settlement.sql';
+import roomMeterReadings from '../drizzle/0003_room_meter_readings.sql';
 import * as schema from '../src/lib/server/db/schema';
 import { demoNeedsReset, installDemo } from '../src/lib/server/demo';
 import { todayInMalaysia } from '../src/lib/server/today';
@@ -23,7 +24,7 @@ interface Env {
 const SEEDED_AT = 'seededAt';
 const MIGRATION_COUNT = 'migrationCount';
 /** Every file in drizzle/, in journal order (demo.spec.ts checks the list against the journal). */
-const MIGRATIONS = [init, tenantPortal, depositSettlement];
+const MIGRATIONS = [init, tenantPortal, depositSettlement, roomMeterReadings];
 
 export class DemoApp extends DurableObject<Env> {
 	constructor(ctx: DurableObjectState, env: Env) {
