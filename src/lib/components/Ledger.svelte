@@ -33,7 +33,8 @@
 	const methodLabel: Record<string, string> = {
 		cash: 'Cash',
 		bank_transfer: 'Bank transfer',
-		other: 'Other'
+		other: 'Other',
+		deposit: 'From deposit'
 	};
 </script>
 

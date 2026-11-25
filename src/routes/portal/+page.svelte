@@ -1,4 +1,5 @@
 <script lang="ts">
+	import DepositSummary from '#lib/components/DepositSummary.svelte';
 	import Ledger from '#lib/components/Ledger.svelte';
 	import Stat from '#lib/components/Stat.svelte';
 	import { formatRM } from '#lib/money.ts';
@@ -43,6 +44,7 @@
 			today={data.today}
 			receiptHref={(id) => `/portal/receipts/${id}`}
 		/>
+		{#if s.deposit}<DepositSummary settlement={s.deposit} />{/if}
 	</section>
 {:else}
 	<p class="card mt-6 text-sm text-slate-500">No tenancy is linked to this account yet.</p>

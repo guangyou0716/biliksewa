@@ -27,6 +27,13 @@ await page.getByRole('button', { name: 'Preview split' }).click();
 await page.getByRole('region', { name: /Preview/ }).waitFor();
 await page.screenshot({ path: 'docs/bill-split.png', fullPage: true });
 
+// A settled deposit (demo data: Farah moved out last month).
+await page.goto(`${base}/tenancies`);
+await page.getByLabel('Show moved-out').check();
+await page.getByRole('link', { name: 'Farah Hani' }).click();
+await page.getByRole('region', { name: /Deposit settled on/ }).waitFor();
+await page.screenshot({ path: 'docs/deposit-settlement.png', fullPage: true });
+
 const tenant = await browser.newPage({
 	viewport: { width: 1280, height: 860 },
 	deviceScaleFactor: 1
@@ -40,5 +47,5 @@ await tenant.screenshot({ path: 'docs/tenant-portal.png', fullPage: true });
 
 await browser.close();
 console.log(
-	'Saved docs/dashboard.png, docs/property-board.png, docs/bill-split.png, docs/tenant-portal.png'
+	'Saved docs/dashboard.png, docs/property-board.png, docs/bill-split.png, docs/tenant-portal.png, docs/deposit-settlement.png'
 );

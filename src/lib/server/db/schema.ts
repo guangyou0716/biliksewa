@@ -1,5 +1,12 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+	type AnySQLiteColumn,
+	index,
+	integer,
+	sqliteTable,
+	text,
+	uniqueIndex
+} from 'drizzle-orm/sqlite-core';
 
 /**
  * Sign-in accounts. Landlords own properties; a tenant account is linked to exactly one tenant
@@ -130,7 +137,11 @@ export const charge = sqliteTable(
 		amountSen: integer('amount_sen').notNull(),
 		dueDate: text('due_date').notNull(),
 		/** Groups the shares of one split house bill. */
-		utilityBillId: integer('utility_bill_id').references(() => utilityBill.id)
+		utilityBillId: integer('utility_bill_id').references(() => utilityBill.id),
+		/** Set on deductions (cleaning, repairs...) taken from the deposit at move-out. */
+		depositSettlementId: integer('deposit_settlement_id').references(
+			(): AnySQLiteColumn => depositSettlement.id
+		)
 	},
 	(t) => [
 		index('charge_tenancy_idx').on(t.tenancyId),
@@ -161,8 +172,31 @@ export const payment = sqliteTable(
 			.references(() => tenancy.id),
 		amountSen: integer('amount_sen').notNull(),
 		paidOn: text('paid_on').notNull(),
-		method: text('method', { enum: ['cash', 'bank_transfer', 'other'] }).notNull(),
+		/** `deposit` = paid out of the tenant's deposit when it was settled at move-out (no new cash). */
+		method: text('method', { enum: ['cash', 'bank_transfer', 'other', 'deposit'] }).notNull(),
 		reference: text('reference')
 	},
 	(t) => [index('payment_tenancy_idx').on(t.tenancyId)]
 );
+
+/**
+ * The deposit settled once a tenant has moved out: it pays the deductions first, then any other unpaid
+ * charges (recorded as one `deposit` payment), and the rest is refunded to the tenant.
+ * Invariant: depositSen = appliedSen + refundSen.
+ */
+export const depositSettlement = sqliteTable('deposit_settlement', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	tenancyId: integer('tenancy_id')
+		.notNull()
+		.unique()
+		.references(() => tenancy.id),
+	settledOn: text('settled_on').notNull(),
+	depositSen: integer('deposit_sen').notNull(),
+	deductionsSen: integer('deductions_sen').notNull(),
+	/** Part of the deposit used to pay the tenant's unpaid charges (including the deductions). */
+	appliedSen: integer('applied_sen').notNull(),
+	refundSen: integer('refund_sen').notNull(),
+	refundMethod: text('refund_method', { enum: ['cash', 'bank_transfer', 'other'] }),
+	refundReference: text('refund_reference'),
+	paymentId: integer('payment_id').references(() => payment.id)
+});
