@@ -9,14 +9,16 @@
 		{ href: '/properties', label: 'Properties' },
 		{ href: '/tenancies', label: 'Tenants' },
 		{ href: '/billing', label: 'Billing' },
-		{ href: '/meters', label: 'Meters' }
+		{ href: '/meters', label: 'Meters' },
+		{ href: '/reminders', label: 'Reminders' },
+		{ href: '/export', label: 'Export' }
 	];
 	const active = (href: string) =>
 		href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
 </script>
 
 <div class="min-h-screen bg-slate-50 text-slate-900">
-	<header class="border-b border-slate-200 bg-white">
+	<header class="border-b border-slate-200 bg-white print:hidden">
 		<div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
 			<a href="/" class="flex items-center gap-2 font-semibold text-brand-900">
 				<span
@@ -54,7 +56,7 @@
 	<main class="mx-auto max-w-6xl px-4 py-6">
 		{@render children()}
 	</main>
-	<footer class="mx-auto max-w-6xl px-4 pb-8 text-xs text-slate-400">
+	<footer class="mx-auto max-w-6xl px-4 pb-8 text-xs text-slate-400 print:hidden">
 		Demo data is synthetic. Today in Malaysia: {data.today}
 	</footer>
 </div>

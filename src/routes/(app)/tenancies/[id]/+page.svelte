@@ -49,6 +49,10 @@
 	{formatRM(l.tenancy.depositSen)}
 </p>
 
+<p class="mt-2">
+	<a class="btn-secondary" href="/tenancies/{l.tenancy.id}/statement">Monthly statement</a>
+</p>
+
 <div class="mt-4">
 	<FormMessage error={form?.error} success={form && 'success' in form ? form.success : null} />
 </div>
@@ -66,7 +70,12 @@
 
 <div class="mt-6 grid gap-6 lg:grid-cols-3">
 	<div class="space-y-6 lg:col-span-2">
-		<Ledger charges={l.charges} payments={l.payments} today={data.today} />
+		<Ledger
+			charges={l.charges}
+			payments={l.payments}
+			today={data.today}
+			receiptHref={(id) => `/receipts/${id}`}
+		/>
 		{#if data.deposit}<DepositSummary settlement={data.deposit} />{/if}
 	</div>
 
