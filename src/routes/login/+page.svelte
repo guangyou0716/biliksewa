@@ -43,6 +43,10 @@
 		</form>
 		<p class="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
 			Demo account (synthetic data): <code>demo@biliksewa.test</code> / <code>demo-landlord</code>
+			{#if import.meta.env.VITE_PUBLIC_DEMO}
+				<br />This is a public demo. Anyone can change the data, and it goes back to the sample data
+				every hour.
+			{/if}
 		</p>
 	</div>
 </main>
