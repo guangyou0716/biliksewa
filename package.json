@@ -24,11 +24,17 @@
 		"db:push": "drizzle-kit push",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
-		"db:studio": "drizzle-kit studio"
+		"db:studio": "drizzle-kit studio",
+		"check:worker": "tsc -p worker/tsconfig.json",
+		"demo:build": "BILIKSEWA_TARGET=cloudflare-demo DATABASE_URL=durable-object vite build",
+		"demo:dev": "npm run demo:build && wrangler dev -c wrangler.demo.jsonc",
+		"demo:deploy": "npm run demo:build && wrangler deploy -c wrangler.demo.jsonc"
 	},
 	"devDependencies": {
+		"@cloudflare/workers-types": "^5.20261125.1",
 		"@eslint/js": "^10.0.1",
 		"@playwright/test": "^1.65.1",
+		"@sveltejs/adapter-cloudflare": "^9.0.0",
 		"@sveltejs/adapter-node": "^6.0.2",
 		"@sveltejs/kit": "^3.2.0",
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
@@ -52,7 +58,8 @@
 		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.72.2",
 		"vite": "^8.3.8",
-		"vitest": "^5.1.0"
+		"vitest": "^5.1.0",
+		"wrangler": "^4.168.0"
 	},
 	"dependencies": {
 		"better-sqlite3": "^13.2.0"
@@ -61,7 +68,9 @@
 		"better-sqlite3@13.2.0": false,
 		"esbuild@0.18.20": true,
 		"esbuild@0.25.12": true,
-		"esbuild@0.28.2": true
+		"esbuild@0.28.2": true,
+		"workerd@1.20261117.1": false,
+		"workerd@1.20261123.1": false
 	},
 	"description": "Room and bed rental management for Malaysian landlords: beds, tenancies, pro-rated rent, bill splitting by nights stayed, tenant ledgers.",
 	"license": "MIT",

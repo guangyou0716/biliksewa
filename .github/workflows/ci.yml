@@ -28,10 +28,13 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run check
+      - run: npm run check:worker
       - run: npm test
       - run: npm run build
         env:
           DATABASE_URL: ci.db
+      - name: build the Cloudflare demo and dry-run its deploy bundle
+        run: npm run demo:build && npx wrangler deploy -c wrangler.demo.jsonc --dry-run --outdir dist-demo
 
   e2e:
     name: Playwright end-to-end

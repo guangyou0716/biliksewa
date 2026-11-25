@@ -1,17 +1,33 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import DepositSummary from '#lib/components/DepositSummary.svelte';
 	import FormMessage from '#lib/components/FormMessage.svelte';
+	import Ledger from '#lib/components/Ledger.svelte';
 	import Stat from '#lib/components/Stat.svelte';
-	import { formatRM } from '#lib/money.ts';
+	import { settlementAmounts } from '#lib/billing.ts';
+	import { formatRM, parseRM } from '#lib/money.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 	const l = $derived(data.ledger);
-	const methodLabel: Record<string, string> = {
-		cash: 'Cash',
-		bank_transfer: 'Bank transfer',
-		other: 'Other'
-	};
+	const inviteUrl = $derived(form && 'inviteUrl' in form ? form.inviteUrl : null);
+	let copied = $state(false);
+	// Live preview of the deposit settlement; the server recomputes it when the form is sent.
+	let deductionAmounts: string[] = $state([]);
+	const deductionsSen = $derived(
+		deductionAmounts.reduce((sum, a) => sum + (a.trim() ? (parseRM(a) ?? 0) : 0), 0)
+	);
+	const preview = $derived(settlementAmounts(l.tenancy.depositSen, deductionsSen, l.balanceSen));
+	let linkInput: HTMLInputElement | undefined = $state();
+	async function copy(text: string) {
+		try {
+			await navigator.clipboard.writeText(text);
+			copied = true;
+		} catch {
+			// No clipboard access (e.g. plain http): select the link so it can be copied by hand.
+			linkInput?.select();
+		}
+	}
 </script>
 
 <svelte:head><title>{l.tenant.name} · biliksewa</title></svelte:head>
@@ -50,63 +66,8 @@
 
 <div class="mt-6 grid gap-6 lg:grid-cols-3">
 	<div class="space-y-6 lg:col-span-2">
-		<section class="card overflow-x-auto" aria-labelledby="charges-h">
-			<h2 id="charges-h" class="font-semibold">Charges</h2>
-			<table class="mt-3 table">
-				<thead>
-					<tr>
-						<th>Due</th><th>Description</th><th class="text-right">Amount</th><th
-							class="text-right"
-						>
-							Unpaid
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each l.charges as c (c.id)}
-						<tr>
-							<td class="whitespace-nowrap text-slate-500">{c.dueDate}</td>
-							<td>{c.description}</td>
-							<td class="text-right tabular-nums">{formatRM(c.amountSen)}</td>
-							<td class="text-right tabular-nums">
-								{#if c.unpaidSen === 0}
-									<span class="badge bg-brand-100 text-brand-700">Paid</span>
-								{:else}
-									<span class={c.dueDate < data.today ? 'font-medium text-amber-700' : ''}>
-										{formatRM(c.unpaidSen)}
-									</span>
-								{/if}
-							</td>
-						</tr>
-					{:else}
-						<tr><td colspan="4" class="text-slate-500">No charges yet.</td></tr>
-					{/each}
-				</tbody>
-			</table>
-		</section>
-
-		<section class="card overflow-x-auto" aria-labelledby="payments-h">
-			<h2 id="payments-h" class="font-semibold">Payments</h2>
-			<table class="mt-3 table">
-				<thead>
-					<tr>
-						<th>Paid on</th><th>Method</th><th>Reference</th><th class="text-right">Amount</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each l.payments as p (p.id)}
-						<tr>
-							<td class="text-slate-500">{p.paidOn}</td>
-							<td>{methodLabel[p.method]}</td>
-							<td class="text-slate-500">{p.reference ?? '—'}</td>
-							<td class="text-right tabular-nums">{formatRM(p.amountSen)}</td>
-						</tr>
-					{:else}
-						<tr><td colspan="4" class="text-slate-500">No payments yet.</td></tr>
-					{/each}
-				</tbody>
-			</table>
-		</section>
+		<Ledger charges={l.charges} payments={l.payments} today={data.today} />
+		{#if data.deposit}<DepositSummary settlement={data.deposit} />{/if}
 	</div>
 
 	<div class="space-y-6">
@@ -131,13 +92,152 @@
 			<p class="text-xs text-slate-500">Recorded manually. No payment gateway is involved.</p>
 		</form>
 
+		<section class="card space-y-3" aria-labelledby="portal-h">
+			<h2 id="portal-h" class="font-semibold">Tenant portal</h2>
+			{#if data.portal.account}
+				<p class="text-sm text-slate-600">
+					Active. {l.tenant.name} signs in as <strong>{data.portal.account.email}</strong> and sees only
+					this ledger.
+				</p>
+				<form
+					method="POST"
+					action="?/revokePortal"
+					use:enhance={({ cancel }) => {
+						if (!confirm(`Remove portal access for ${l.tenant.name}?`)) cancel();
+					}}
+				>
+					<button class="btn-secondary w-full">Remove portal access</button>
+				</form>
+			{:else}
+				<p class="text-sm text-slate-600">
+					Send {l.tenant.name} a one-time link so they can check their own rent, bills and receipts.
+				</p>
+				{#if inviteUrl}
+					<label class="label">
+						Invite link (shown once, valid 7 days)
+						<input
+							bind:this={linkInput}
+							class="field font-mono text-xs"
+							readonly
+							value={inviteUrl}
+						/>
+					</label>
+					<div class="flex gap-2">
+						<button type="button" class="btn-secondary flex-1" onclick={() => copy(inviteUrl)}>
+							{copied ? 'Copied' : 'Copy link'}
+						</button>
+						<a
+							class="btn-secondary flex-1"
+							target="_blank"
+							rel="noopener noreferrer"
+							href="https://wa.me/?text={encodeURIComponent(
+								`Hi ${l.tenant.name}, check your rent and payments for ${l.property.name} here: ${inviteUrl}`
+							)}"
+						>
+							WhatsApp
+						</a>
+					</div>
+				{:else if data.portal.inviteExpiresOn}
+					<p class="text-xs text-slate-500">
+						An invite link is open until {data.portal.inviteExpiresOn}. Creating a new one cancels
+						it.
+					</p>
+				{/if}
+				<form
+					method="POST"
+					action="?/invite"
+					use:enhance={() => {
+						copied = false;
+						return ({ update }) => update({ reset: false });
+					}}
+				>
+					<button class="btn w-full">
+						{inviteUrl ? 'Create a new link' : 'Create invite link'}
+					</button>
+				</form>
+			{/if}
+		</section>
+
+		{#if l.tenancy.endDate && l.tenancy.endDate > data.today && !data.deposit && l.tenancy.depositSen > 0}
+			<p class="card text-sm text-slate-500">
+				The deposit can be settled from the move-out day ({l.tenancy.endDate}).
+			</p>
+		{:else if l.tenancy.endDate && !data.deposit && l.tenancy.depositSen > 0}
+			<form method="POST" action="?/settleDeposit" use:enhance class="card space-y-3">
+				<h2 class="font-semibold">Settle deposit</h2>
+				<p class="text-xs text-slate-500">
+					The deposit of {formatRM(l.tenancy.depositSen)} pays the deductions first, then any unpaid rent
+					and bills; the rest is refunded.
+				</p>
+				<label class="label">
+					Settled on
+					<input class="field" type="date" name="settledOn" required defaultValue={data.today} />
+				</label>
+				<fieldset class="space-y-2">
+					<legend class="text-sm font-medium text-slate-700">Deductions (optional)</legend>
+					{#each Array.from({ length: 3 }, (_, i) => i) as i (i)}
+						<div class="flex gap-2">
+							<input
+								class="field flex-1"
+								name="deductionLabel"
+								aria-label="Deduction {i + 1} description"
+								placeholder={i === 0 ? 'e.g. Cleaning' : ''}
+							/>
+							<input
+								class="field w-28"
+								name="deductionAmount"
+								inputmode="decimal"
+								aria-label="Deduction {i + 1} amount (RM)"
+								placeholder="RM"
+								bind:value={deductionAmounts[i]}
+							/>
+						</div>
+					{/each}
+				</fieldset>
+				<dl class="space-y-1 text-sm" aria-label="Settlement preview">
+					<div class="flex justify-between">
+						<dt class="text-slate-500">Used for charges</dt>
+						<dd class="tabular-nums">{formatRM(preview.appliedSen)}</dd>
+					</div>
+					<div class="flex justify-between font-semibold">
+						<dt>Refund</dt>
+						<dd class="tabular-nums">{formatRM(preview.refundSen)}</dd>
+					</div>
+					{#if preview.balanceAfterSen > 0}
+						<p class="text-xs text-amber-700">
+							{formatRM(preview.balanceAfterSen)} stays owing after the whole deposit is used.
+						</p>
+					{:else if preview.balanceAfterSen < 0}
+						<p class="text-xs text-slate-500">
+							The tenant also has {formatRM(-preview.balanceAfterSen)} credit, not included in the refund.
+						</p>
+					{/if}
+				</dl>
+				<label class="label">
+					Refund paid by
+					<select class="field" name="refundMethod">
+						<option value="bank_transfer">Bank transfer</option>
+						<option value="cash">Cash</option>
+						<option value="other">Other</option>
+					</select>
+				</label>
+				<label class="label">
+					Refund reference (optional) <input class="field" name="refundReference" />
+				</label>
+				<button class="btn w-full">Settle deposit</button>
+			</form>
+		{/if}
+
 		{#if !l.tenancy.endDate}
 			<form method="POST" action="?/moveOut" use:enhance class="card space-y-3">
 				<h2 class="font-semibold">Move out</h2>
 				<label class="label">
 					Move-out date <input class="field" type="date" name="endDate" required />
 				</label>
-				<p class="text-xs text-slate-500">The tenant's last night is the night before this date.</p>
+				<p class="text-xs text-slate-500">
+					The tenant's last night is the night before this date. Rent and house bills already billed
+					past it are corrected.
+				</p>
 				<button class="btn-secondary w-full">Record move-out</button>
 			</form>
 		{/if}

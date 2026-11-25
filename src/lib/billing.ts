@@ -90,3 +90,18 @@ export function overdueSen(charges: LedgerCharge[], paidSen: number, today: stri
 		.filter((c) => c.dueDate < today)
 		.reduce((sum, c) => sum + c.unpaidSen, 0);
 }
+
+/**
+ * The arithmetic of a settlement, shared by the server and the live preview on the page.
+ * `balanceSen` is what the tenant owes before the deductions (negative = in credit).
+ */
+export function settlementAmounts(depositSen: number, deductionsSen: number, balanceSen: number) {
+	const owedSen = Math.max(0, balanceSen + deductionsSen);
+	const appliedSen = Math.min(depositSen, owedSen);
+	return {
+		appliedSen,
+		refundSen: depositSen - appliedSen,
+		/** Still owed after the whole deposit was used (positive), or credit left over (negative). */
+		balanceAfterSen: balanceSen + deductionsSen - appliedSen
+	};
+}
