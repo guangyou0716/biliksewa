@@ -28,3 +28,4 @@ test-results
 *.db
 e2e.db*
 local.db*
+dist-demo
