@@ -123,6 +123,17 @@ describe('move in / move out', () => {
 });
 
 describe('rent billing', () => {
+	it('re-pro-rates rent already billed when the tenant moves out', () => {
+		const { a } = house();
+		const t = tenantOn(a.id, '2026-09-01', 31000);
+		generateRent(db, owner, '2026-10');
+		generateRent(db, owner, '2026-11');
+		moveOut(db, owner, t.id, '2026-10-11');
+		const rents = db.select().from(charge).where(eq(charge.tenancyId, t.id)).all();
+		// 10 of 31 nights in October; nothing in November.
+		expect(rents.map((c) => [c.period, c.amountSen])).toEqual([['2026-10', 10000]]);
+	});
+
 	it('pro-rates and is idempotent per month', () => {
 		const { a, b } = house();
 		tenantOn(a.id, '2026-09-01', 40000);

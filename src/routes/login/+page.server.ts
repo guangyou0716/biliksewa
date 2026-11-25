@@ -2,12 +2,8 @@ import { fail, redirect } from '@sveltejs/kit';
 import { authenticate, createSession, SESSION_COOKIE } from '#lib/server/auth.ts';
 import { db } from '#lib/server/db/index.ts';
 import { text } from '#lib/server/forms.ts';
+import { safeNext } from '#lib/safe-next.ts';
 import type { Actions, PageServerLoad } from './$types';
-
-/** Only allow redirects back into this app. */
-function safeNext(next: string | null): string {
-	return next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
-}
 
 export const load: PageServerLoad = ({ locals, url }) => {
 	if (locals.user) redirect(303, safeNext(url.searchParams.get('next')));

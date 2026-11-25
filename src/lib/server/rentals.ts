@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, or, gt, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNull, or, sql } from 'drizzle-orm';
 import { allocatePayments, overdueSen, proratedRent, splitByNights } from '../billing';
 import { addDays, monthOf, monthRange, overlapNights, staysOverlap } from '../dates';
 import type { DB } from './db/client';
@@ -231,7 +231,27 @@ export function moveOut(db: DB, ownerId: number, tenancyId: number, endDate: str
 	const { tenancy: t } = ownedTenancy(db, ownerId, tenancyId);
 	if (t.endDate) throw new RentalError('Tenant has already moved out');
 	if (endDate <= t.startDate) throw new RentalError('Move-out must be after the move-in date');
-	db.update(tenancy).set({ endDate }).where(eq(tenancy.id, tenancyId)).run();
+	db.transaction((tx) => {
+		tx.update(tenancy).set({ endDate }).where(eq(tenancy.id, tenancyId)).run();
+		// Rent already billed for the move-out month or later is re-pro-rated to the nights actually stayed.
+		const rents = tx
+			.select()
+			.from(charge)
+			.where(
+				and(
+					eq(charge.tenancyId, tenancyId),
+					eq(charge.kind, 'rent'),
+					gte(charge.period, monthOf(endDate))
+				)
+			)
+			.all();
+		for (const c of rents) {
+			const amountSen = proratedRent(t.monthlyRentSen, c.period, t.startDate, endDate);
+			if (amountSen === 0) tx.delete(charge).where(eq(charge.id, c.id)).run();
+			else if (amountSen !== c.amountSen)
+				tx.update(charge).set({ amountSen }).where(eq(charge.id, c.id)).run();
+		}
+	});
 }
 
 export function listTenancies(db: DB, ownerId: number, today: string) {
