@@ -31,38 +31,36 @@ export function settleDeposit(
 	today: string
 ) {
 	const { tenancy: t } = ownedTenancy(db, ownerId, tenancyId);
-	if (!t.endDate) throw new RentalError('Record the move-out before settling the deposit');
-	if (!(t.depositSen > 0)) throw new RentalError('No deposit is held for this tenancy');
-	if (input.settledOn < t.endDate)
-		throw new RentalError('The settlement date cannot be before the move-out date');
-	if (input.settledOn > today) throw new RentalError('The settlement date cannot be in the future');
+	if (!t.endDate) throw new RentalError('err.depositNeedsMoveOut');
+	if (!(t.depositSen > 0)) throw new RentalError('err.noDeposit');
+	if (input.settledOn < t.endDate) throw new RentalError('err.settleBeforeMoveOut');
+	if (input.settledOn > today) throw new RentalError('err.settleFuture');
 	if (input.deductions.length > MAX_DEDUCTIONS)
-		throw new RentalError(`At most ${MAX_DEDUCTIONS} deductions`);
+		throw new RentalError('err.maxDeductions', { max: MAX_DEDUCTIONS });
 	const deductions = input.deductions.map((d) => ({
 		label: d.label.trim(),
 		amountSen: d.amountSen
 	}));
 	for (const d of deductions) {
-		if (!d.label) throw new RentalError('Each deduction needs a description');
+		if (!d.label) throw new RentalError('err.deductionLabel');
 		if (d.label.length > MAX_LABEL)
-			throw new RentalError(`Keep each deduction description under ${MAX_LABEL} characters`);
+			throw new RentalError('err.deductionLabelLong', { max: MAX_LABEL });
 		if (!Number.isSafeInteger(d.amountSen) || d.amountSen <= 0)
-			throw new RentalError('Each deduction must be more than RM 0');
+			throw new RentalError('err.deductionPositive');
 	}
 	const deductionsSen = deductions.reduce((s, d) => s + d.amountSen, 0);
-	if (deductionsSen > t.depositSen)
-		throw new RentalError('Deductions cannot be more than the deposit held');
+	if (deductionsSen > t.depositSen) throw new RentalError('err.deductionsTooBig');
 	if (input.refundMethod !== null && !REFUND_METHODS.includes(input.refundMethod))
-		throw new RentalError('Choose how the refund is paid');
+		throw new RentalError('err.refundMethod');
 
 	// better-sqlite3 is synchronous: the balance read and the writes cannot interleave with others.
 	return db.transaction((tx) => {
 		if (tx.select().from(depositSettlement).where(eq(depositSettlement.tenancyId, tenancyId)).get())
-			throw new RentalError('The deposit was already settled');
+			throw new RentalError('err.depositSettled');
 		const { balanceSen } = ledgerEntries(tx, tenancyId, today);
 		const amounts = settlementAmounts(t.depositSen, deductionsSen, balanceSen);
 		if (amounts.refundSen > 0 && input.refundMethod === null)
-			throw new RentalError('Choose how the refund is paid');
+			throw new RentalError('err.refundMethod');
 
 		const paid = amounts.appliedSen
 			? tx

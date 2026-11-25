@@ -59,13 +59,16 @@ change the demo data, and it goes back to the sample data every hour.
   language per page, independent of your own). biliksewa never sends anything itself.
 - **Three languages**: English, Bahasa Melayu and 简体中文. The EN / BM / 中文 picker in the header (and on
   the sign-in and invite pages) is a plain form, so it works without JavaScript; the choice is kept in a
-  cookie for a year, and until then the browser's language is used. Translated so far: navigation, sign-in,
-  invite, the whole tenant portal (ledger, meter readings, deposit, statements, receipts, the downloaded
-  statement file) and overdue reminders including the message text. The other landlord pages (dashboard,
-  properties, tenancies, billing, meters, export) are still English only. Names and charge descriptions are
-  shown as entered. A unit test checks that every language has every message with the same placeholders.
+  cookie for a year, and until then the browser's language is used. Every page is translated: sign-in,
+  invite, all landlord pages (dashboard, properties, tenants, billing, meters, reminders including the
+  message text, export), the whole tenant portal (ledger, meter readings, deposit, statements, receipts, the
+  downloaded statement file), and the server's form validation and success messages ("Rent: enter an
+  amount like 450", "Payment of RM 100.00 recorded"), with the field name translated too. Names and charge
+  descriptions are shown as entered. A unit test checks that every language has every message with the
+  same placeholders, and validation errors carry a message key, so a missing translation fails the build.
 - **Accessibility**: every page is audited with axe-core (WCAG 2.1 A/AA rules) in the Playwright tests, in
-  English plus BM/Chinese for the public pages and the portal; `<html lang>` follows the chosen language.
+  English, Bahasa Melayu and Chinese for the public and landlord pages, and English and Chinese for the
+  portal; `<html lang>` follows the chosen language.
 - **Tenant portal**: the landlord creates a one-time invite link (valid 7 days, copy or share on WhatsApp).
   The tenant picks a password and then sees only their own stay, charges, payments and printable payment
   receipts. Landlord pages are closed to tenant accounts, and another tenant's receipt is a 404, the same as

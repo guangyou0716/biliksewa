@@ -44,7 +44,7 @@ function receiptWhere(db: DB, where: SQL) {
 		.innerJoin(user, eq(property.ownerId, user.id))
 		.where(where)
 		.get();
-	if (!row) throw new RentalError('Receipt not found');
+	if (!row) throw new RentalError('err.receiptNotFound');
 	return { ...row, number: receiptNumber(row.payment.id) };
 }
 
@@ -78,7 +78,7 @@ function stayWhere(db: DB, where: SQL) {
 		.innerJoin(user, eq(property.ownerId, user.id))
 		.where(where)
 		.get();
-	if (!row) throw new RentalError('Tenancy not found');
+	if (!row) throw new RentalError('err.tenancyNotFound');
 	return row;
 }
 
@@ -210,19 +210,49 @@ export const CHARGES_CSV_HEADER = [
 	'unpaid_rm'
 ];
 
-/** Every charge on the landlord's properties (optionally one billing month), with what is still unpaid. */
+/** Rows joined up to the property, kept only for one landlord. */
+const ownerScope = (ownerId: number) => eq(property.ownerId, ownerId);
+
+/**
+ * Every charge on the landlord's properties (optionally one billing month), with what is still unpaid.
+ * Three queries in total (stays, charges, payments), however many tenancies there are. Unpaid amounts
+ * are always worked out from the tenancy's whole history, so a month filter never changes them.
+ */
 export function chargesCsv(db: DB, ownerId: number, period?: string): string {
+	const charges = new Map<number, (typeof charge.$inferSelect)[]>();
+	const chargeRows = db
+		.select({ charge })
+		.from(charge)
+		.innerJoin(tenancy, eq(charge.tenancyId, tenancy.id))
+		.innerJoin(bed, eq(tenancy.bedId, bed.id))
+		.innerJoin(room, eq(bed.roomId, room.id))
+		.innerJoin(property, eq(room.propertyId, property.id))
+		.where(ownerScope(ownerId))
+		.all();
+	for (const { charge: c } of chargeRows) {
+		const list = charges.get(c.tenancyId);
+		if (list) list.push(c);
+		else charges.set(c.tenancyId, [c]);
+	}
+	const paid = new Map<number, number>();
+	const paymentRows = db
+		.select({ tenancyId: payment.tenancyId, amountSen: payment.amountSen })
+		.from(payment)
+		.innerJoin(tenancy, eq(payment.tenancyId, tenancy.id))
+		.innerJoin(bed, eq(tenancy.bedId, bed.id))
+		.innerJoin(room, eq(bed.roomId, room.id))
+		.innerJoin(property, eq(room.propertyId, property.id))
+		.where(ownerScope(ownerId))
+		.all();
+	for (const p of paymentRows) paid.set(p.tenancyId, (paid.get(p.tenancyId) ?? 0) + p.amountSen);
+
 	const rows = [];
 	for (const s of ownerStays(db, ownerId)) {
-		const charges = db.select().from(charge).where(eq(charge.tenancyId, s.tenancy.id)).all();
-		const paidSen = db
-			.select({ amountSen: payment.amountSen })
-			.from(payment)
-			.where(eq(payment.tenancyId, s.tenancy.id))
-			.all()
-			.reduce((sum, p) => sum + p.amountSen, 0);
-		const unpaid = new Map(allocatePayments(charges, paidSen).map((c) => [c.id, c.unpaidSen]));
-		for (const c of charges) {
+		const own = charges.get(s.tenancy.id) ?? [];
+		const unpaid = new Map(
+			allocatePayments(own, paid.get(s.tenancy.id) ?? 0).map((c) => [c.id, c.unpaidSen])
+		);
+		for (const c of own) {
 			if (period && c.period !== period) continue;
 			rows.push({ c, s, unpaidSen: unpaid.get(c.id) ?? 0 });
 		}

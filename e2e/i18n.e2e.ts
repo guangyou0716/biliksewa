@@ -84,3 +84,54 @@ test('the landlord writes a reminder in the tenant’s language', async ({ page 
 	await page.getByRole('link', { name: '简体中文' }).click();
 	await expect(first.getByRole('textbox')).toHaveValue(/友情提醒/);
 });
+
+test('landlord pages and server-side form errors follow the chosen language', async ({ page }) => {
+	await page.goto('/login');
+	await page.getByLabel('Email').fill('demo@biliksewa.test');
+	await page.getByLabel('Password').fill('demo-landlord');
+	await page.getByRole('button', { name: 'Sign in' }).click();
+	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+
+	await page.getByRole('button', { name: '中文 – 简体中文' }).click();
+	await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
+	await expect(page.getByRole('heading', { name: '概览', level: 1 })).toBeVisible();
+	await expect(page.getByRole('link', { name: '生成本月账单' })).toBeVisible();
+	await expect(page.getByText('已入住床位')).toBeVisible();
+
+	await page.goto('/properties');
+	await expect(page.getByRole('heading', { name: '物业', level: 1 })).toBeVisible();
+	await page.getByRole('link', { name: /Teres Cempaka/ }).click();
+	await expect(page.getByText(/每月 \d+ 日交租/)).toBeVisible();
+	// Server-side validation comes back in Chinese, with the field name translated.
+	const addBed = page.locator('form[action="?/bed"]').first();
+	await addBed.getByLabel('床位编号').fill('Z');
+	await addBed.getByLabel('租金（RM）').fill('abc');
+	await addBed.getByRole('button', { name: /^为 .+ 添加床位$/ }).click();
+	await expect(page.getByRole('alert')).toHaveText('租金：请输入金额，例如 450 或 450.50');
+
+	await page.goto('/tenancies');
+	await expect(page.getByRole('heading', { name: '租客', level: 1 })).toBeVisible();
+	await expect(page.getByText('显示已退租')).toBeVisible();
+	await page.getByRole('link', { name: 'Hafiz Danial' }).click();
+	await expect(page.getByRole('heading', { name: '记录付款' })).toBeVisible();
+	await expect(page.getByRole('region', { name: '租客门户' })).toBeVisible();
+
+	await page.goto('/billing');
+	await page.getByLabel('账单', { exact: true }).fill('Unifi');
+	await page.getByLabel('金额（RM）').fill('12x');
+	await page.getByRole('button', { name: '预览分摊' }).click();
+	await expect(page.getByRole('alert')).toHaveText('账单金额：请输入金额，例如 450 或 450.50');
+
+	const missing = await page.goto('/tenancies/99999');
+	expect(missing?.status()).toBe(404);
+	await expect(page.getByText('找不到该租约')).toBeVisible();
+
+	// Bahasa Melayu: meters and export.
+	await page.goto('/meters');
+	await page.getByRole('button', { name: 'BM – Bahasa Melayu' }).click();
+	await expect(page.getByRole('heading', { name: 'Bacaan meter', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /^Menunggu anda \(\d+\)$/ })).toBeVisible();
+	await page.goto('/export');
+	await expect(page.getByRole('heading', { name: 'Eksport ke hamparan' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Muat turun CSV caj' })).toBeVisible();
+});

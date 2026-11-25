@@ -55,10 +55,10 @@ export function photoType(bytes: Uint8Array): PhotoType | null {
 export async function readPhoto(file: File | null): Promise<Photo | null> {
 	if (!file || file.size === 0) return null;
 	if (file.size > MAX_PHOTO_BYTES)
-		throw new RentalError(`The photo is too large (max ${MAX_PHOTO_BYTES / 1000} KB)`);
+		throw new RentalError('err.photoTooLarge', { kb: MAX_PHOTO_BYTES / 1000 });
 	const bytes = new Uint8Array(await file.arrayBuffer());
 	const type = photoType(bytes);
-	if (!type) throw new RentalError('The photo must be a JPEG, PNG or WebP image');
+	if (!type) throw new RentalError('err.photoType');
 	return { type, bytes };
 }
 
@@ -82,27 +82,24 @@ function checkAgainstPrevious(
 	readingTenths: number
 ): number | null {
 	if (!prev) return null;
-	if (readOn <= prev.readOn)
-		throw new RentalError(
-			`The reading date must be after the last confirmed reading (${prev.readOn})`
-		);
+	if (readOn <= prev.readOn) throw new RentalError('err.readingDateOrder', { date: prev.readOn });
 	if (readingTenths < prev.readingTenths)
-		throw new RentalError(
-			`The reading cannot be lower than the last confirmed reading (${formatKwh(prev.readingTenths)})`
-		);
+		throw new RentalError('err.readingLower', { kwh: formatKwh(prev.readingTenths) });
 	const used = readingTenths - prev.readingTenths;
 	const days = toDayNumber(readOn) - toDayNumber(prev.readOn);
 	if (used > days * MAX_KWH_PER_DAY * 10)
-		throw new RentalError(
-			`That is ${formatKwh(used)} in ${days} day(s), more than ${MAX_KWH_PER_DAY} kWh a day. Check the reading`
-		);
+		throw new RentalError('err.readingTooHigh', {
+			kwh: formatKwh(used),
+			days,
+			max: MAX_KWH_PER_DAY
+		});
 	return used;
 }
 
 function checkInput(readOn: string, readingTenths: number, today: string) {
-	if (readOn > today) throw new RentalError('The reading date cannot be in the future');
+	if (readOn > today) throw new RentalError('err.readingFuture');
 	if (!Number.isSafeInteger(readingTenths) || readingTenths < 0)
-		throw new RentalError('Enter the reading in kWh, like 1234.5');
+		throw new RentalError('err.readingFormat');
 }
 
 function photoColumns(photo: Photo | null) {
@@ -124,7 +121,7 @@ function tenantStay(db: DB, userId: number, tenancyId: number) {
 		.innerJoin(property, eq(room.propertyId, property.id))
 		.where(and(eq(tenancy.id, tenancyId), eq(tenant.userId, userId)))
 		.get();
-	if (!row) throw new RentalError('Tenancy not found');
+	if (!row) throw new RentalError('err.tenancyNotFound');
 	return row;
 }
 
@@ -137,13 +134,11 @@ export function submitReading(
 	now = Date.now()
 ) {
 	const stay = tenantStay(db, userId, tenancyId);
-	if (stay.rate === null)
-		throw new RentalError('Your landlord has not turned on meter readings for this house');
+	if (stay.rate === null) throw new RentalError('err.metersOff');
 	checkInput(input.readOn, input.readingTenths, today);
-	if (input.readOn < stay.tenancy.startDate)
-		throw new RentalError('The reading date cannot be before you moved in');
+	if (input.readOn < stay.tenancy.startDate) throw new RentalError('err.readingBeforeMoveIn');
 	if (stay.tenancy.endDate && input.readOn > stay.tenancy.endDate)
-		throw new RentalError('The reading date cannot be after you moved out');
+		throw new RentalError('err.readingAfterMoveOut');
 	return db.transaction((tx) => {
 		checkAgainstPrevious(latestConfirmed(tx, stay.roomId), input.readOn, input.readingTenths);
 		const waiting = tx
@@ -151,8 +146,7 @@ export function submitReading(
 			.from(meterReading)
 			.where(and(eq(meterReading.roomId, stay.roomId), eq(meterReading.status, 'pending')))
 			.get();
-		if (waiting)
-			throw new RentalError('A reading for this room is already waiting for the landlord');
+		if (waiting) throw new RentalError('err.readingPending');
 		return tx
 			.insert(meterReading)
 			.values({
@@ -258,7 +252,7 @@ function ownedRoomWithRate(db: DB, ownerId: number, roomId: number) {
 		.innerJoin(property, eq(room.propertyId, property.id))
 		.where(and(eq(room.id, roomId), eq(property.ownerId, ownerId)))
 		.get();
-	if (!row) throw new RentalError('Room not found');
+	if (!row) throw new RentalError('err.roomNotFound');
 	return row;
 }
 
@@ -270,21 +264,21 @@ function ownedReading(db: DB, ownerId: number, readingId: number) {
 		.innerJoin(property, eq(room.propertyId, property.id))
 		.where(and(eq(meterReading.id, readingId), eq(property.ownerId, ownerId)))
 		.get();
-	if (!row) throw new RentalError('Reading not found');
+	if (!row) throw new RentalError('err.readingNotFound');
 	return row;
 }
 
 /** Sets the property's electricity rate (sen per kWh x 100); null turns meter readings off. */
 export function setMeterRate(db: DB, ownerId: number, propertyId: number, rate: number | null) {
 	if (rate !== null && (!Number.isSafeInteger(rate) || rate <= 0 || rate > MAX_RATE))
-		throw new RentalError('Enter a rate between RM 0.0001 and RM 5 per kWh');
+		throw new RentalError('err.rateRange');
 	const updated = db
 		.update(property)
 		.set({ meterRate: rate })
 		.where(and(eq(property.id, propertyId), eq(property.ownerId, ownerId)))
 		.returning({ id: property.id })
 		.all();
-	if (!updated.length) throw new RentalError('Property not found');
+	if (!updated.length) throw new RentalError('err.propertyNotFound');
 }
 
 /**
@@ -306,7 +300,7 @@ function bill(
 		tx.update(meterReading).set(decided).where(eq(meterReading.id, r.id)).run();
 		return { amountSen: 0, usedTenths: null, shares: [] };
 	}
-	if (rate === null) throw new RentalError('Set the electricity rate for this property first');
+	if (rate === null) throw new RentalError('err.setRateFirst');
 	const amountSen = meterChargeSen(used, rate);
 	tx.update(meterReading)
 		.set({ ...decided, usedTenths: used, rate, amountSen })
@@ -351,8 +345,7 @@ export function confirmReading(
 	const { reading, roomName } = ownedReading(db, ownerId, readingId);
 	return db.transaction((tx) => {
 		const current = ownedReading(tx, ownerId, readingId);
-		if (current.reading.status !== 'pending')
-			throw new RentalError('This reading was already decided');
+		if (current.reading.status !== 'pending') throw new RentalError('err.readingDecided');
 		return bill(tx, reading, roomName, current.rate, today);
 	});
 }
@@ -366,10 +359,9 @@ export function rejectReading(
 ) {
 	const { reading } = ownedReading(db, ownerId, readingId);
 	const why = reason.trim();
-	if (!why) throw new RentalError('Give the tenant a reason for rejecting the reading');
-	if (why.length > MAX_REASON)
-		throw new RentalError(`Keep the reason under ${MAX_REASON} characters`);
-	if (reading.status !== 'pending') throw new RentalError('This reading was already decided');
+	if (!why) throw new RentalError('err.rejectReason');
+	if (why.length > MAX_REASON) throw new RentalError('err.reasonLong', { max: MAX_REASON });
+	if (reading.status !== 'pending') throw new RentalError('err.readingDecided');
 	db.update(meterReading)
 		.set({ status: 'rejected', rejectReason: why, decidedOn: today })
 		.where(and(eq(meterReading.id, readingId), eq(meterReading.status, 'pending')))
@@ -395,15 +387,14 @@ export function recordReading(
 				.where(and(eq(meterReading.roomId, roomId), eq(meterReading.status, 'pending')))
 				.get()
 		)
-			throw new RentalError('Confirm or reject the reading waiting for this room first');
+			throw new RentalError('err.confirmPendingFirst');
 		// Validated (and billed) before the row exists, so a rejected input leaves nothing behind.
 		const used = checkAgainstPrevious(
 			latestConfirmed(tx, roomId),
 			input.readOn,
 			input.readingTenths
 		);
-		if (used !== null && r.rate === null)
-			throw new RentalError('Set the electricity rate for this property first');
+		if (used !== null && r.rate === null) throw new RentalError('err.setRateFirst');
 		const row = tx
 			.insert(meterReading)
 			.values({

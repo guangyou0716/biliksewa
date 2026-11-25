@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import FormMessage from '#lib/components/FormMessage.svelte';
 	import { addDays, monthRange } from '#lib/dates.ts';
+	import { t } from '#lib/i18n.svelte.ts';
 	import { formatRM } from '#lib/money.ts';
 	import type { PageProps } from './$types';
 
@@ -19,12 +20,10 @@
 	const splitDone = $derived(form && 'split' in form ? (form.split ?? null) : null);
 </script>
 
-<svelte:head><title>Billing · biliksewa</title></svelte:head>
+<svelte:head><title>{t('nav.billing')} · biliksewa</title></svelte:head>
 
-<h1 class="text-2xl font-semibold">Billing</h1>
-<p class="text-sm text-slate-500">
-	All amounts are in ringgit. Nothing is charged to a card: this only records bills.
-</p>
+<h1 class="text-2xl font-semibold">{t('nav.billing')}</h1>
+<p class="text-sm text-slate-500">{t('bill.intro')}</p>
 
 <div class="mt-4">
 	<FormMessage
@@ -32,22 +31,24 @@
 		success={rentDone
 			? rentDone.message
 			: splitDone
-				? `Split ${splitDone.label} (${formatRM(splitDone.amountSen)}) across ${splitDone.count} tenants.`
+				? t('ok.split', {
+						label: splitDone.label,
+						amount: formatRM(splitDone.amountSen),
+						n: splitDone.count
+					})
 				: null}
 	/>
 </div>
 
 <div class="mt-4 grid gap-6 lg:grid-cols-2">
 	<form method="POST" action="?/rent" use:enhance class="card space-y-4 self-start">
-		<h2 class="font-semibold">Monthly rent</h2>
-		<p class="text-sm text-slate-500">
-			Creates one rent charge per tenancy for the month. Move-ins and move-outs are pro-rated by
-			nights. Running it twice is safe.
-		</p>
+		<h2 class="font-semibold">{t('field.monthlyRent')}</h2>
+		<p class="text-sm text-slate-500">{t('bill.rentIntro')}</p>
 		<label class="label">
-			Month <input class="field" type="month" name="period" required defaultValue={thisMonth} />
+			{t('statement.month')}
+			<input class="field" type="month" name="period" required defaultValue={thisMonth} />
 		</label>
-		<button class="btn">Generate rent</button>
+		<button class="btn">{t('bill.generate')}</button>
 	</form>
 
 	<form
@@ -58,13 +59,10 @@
 				update({ reset: false })}
 		class="card space-y-4"
 	>
-		<h2 class="font-semibold">Split a house bill</h2>
-		<p class="text-sm text-slate-500">
-			Electricity, water or internet for the whole house, shared by the nights each tenant stayed.
-			Shares always add up to the bill, to the sen.
-		</p>
+		<h2 class="font-semibold">{t('bill.split')}</h2>
+		<p class="text-sm text-slate-500">{t('bill.splitIntro')}</p>
 		<label class="label">
-			Property
+			{t('bill.property')}
 			<select class="field" name="propertyId" required>
 				{#each data.properties as p (p.id)}
 					<option value={p.id} selected={String(p.id) === v.propertyId}>{p.name}</option>
@@ -73,7 +71,8 @@
 		</label>
 		<div class="grid gap-4 sm:grid-cols-2">
 			<label class="label">
-				Bill <input
+				{t('bill.bill')}
+				<input
 					class="field"
 					name="label"
 					required
@@ -82,16 +81,12 @@
 				/>
 			</label>
 			<label class="label">
-				Amount (RM) <input
-					class="field"
-					name="amount"
-					required
-					inputmode="decimal"
-					value={v.amount ?? ''}
-				/>
+				{t('tenancy.amountRM')}
+				<input class="field" name="amount" required inputmode="decimal" value={v.amount ?? ''} />
 			</label>
 			<label class="label">
-				From <input
+				{t('field.from')}
+				<input
 					class="field"
 					type="date"
 					name="fromDate"
@@ -100,7 +95,8 @@
 				/>
 			</label>
 			<label class="label">
-				To <input
+				{t('field.to')}
+				<input
 					class="field"
 					type="date"
 					name="toDate"
@@ -109,7 +105,8 @@
 				/>
 			</label>
 			<label class="label">
-				Due date <input
+				{t('field.dueDate')}
+				<input
 					class="field"
 					type="date"
 					name="dueDate"
@@ -118,19 +115,29 @@
 				/>
 			</label>
 		</div>
-		<button class="btn-secondary">Preview split</button>
+		<button class="btn-secondary">{t('bill.previewBtn')}</button>
 	</form>
 </div>
 
 {#if preview}
 	<section class="card mt-6" aria-labelledby="preview-h">
 		<h2 id="preview-h" class="font-semibold">
-			Preview: {preview.input.label} · {formatRM(preview.input.amountSen)} · {preview.input
-				.fromDate} to {preview.input.toDate}
+			{t('bill.previewHeading', {
+				label: preview.input.label,
+				amount: formatRM(preview.input.amountSen),
+				from: preview.input.fromDate,
+				to: preview.input.toDate
+			})}
 		</h2>
 		<table class="mt-3 table">
 			<thead>
-				<tr><th>Tenant</th><th class="text-right">Nights</th><th class="text-right">Share</th></tr>
+				<tr>
+					<th>{t('common.tenant')}</th><th class="text-right">{t('col.nights')}</th><th
+						class="text-right"
+					>
+						{t('col.share')}
+					</th>
+				</tr>
 			</thead>
 			<tbody>
 				{#each preview.shares as s (s.id)}
@@ -141,7 +148,7 @@
 					</tr>
 				{/each}
 				<tr class="font-semibold">
-					<td>Total</td>
+					<td>{t('col.total')}</td>
 					<td class="text-right tabular-nums">
 						{preview.shares.reduce((n, s) => n + s.nights, 0)}
 					</td>
@@ -158,7 +165,7 @@
 			<input type="hidden" name="fromDate" value={preview.input.fromDate} />
 			<input type="hidden" name="toDate" value={preview.input.toDate} />
 			<input type="hidden" name="dueDate" value={preview.input.dueDate} />
-			<button class="btn">Confirm and bill {preview.shares.length} tenants</button>
+			<button class="btn">{t('bill.confirm', { n: preview.shares.length })}</button>
 		</form>
 	</section>
 {/if}

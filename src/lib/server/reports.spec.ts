@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createDb, type DB } from './db/client';
 import { tenancy, tenant, user } from './db/schema';
@@ -222,6 +222,46 @@ describe('CSV exports', () => {
 		const sept = chargesCsv(db, owner, '2026-09').trimEnd().split('\r\n');
 		expect(sept).toHaveLength(3);
 		expect(chargesCsv(db, other)).not.toContain('Aina');
+	});
+
+	it('works out unpaid amounts per tenancy with a fixed number of queries', () => {
+		const [aina, ben] = house(owner, 'Rumah Uji', ['Aina', 'Ben', 'Chen']);
+		const [dina] = house(owner, 'Rumah Dua', ['Dina']);
+		house(other, 'Theirs', ['Chong']);
+		generateRent(db, owner, '2026-09');
+		generateRent(db, owner, '2026-10');
+		generateRent(db, other, '2026-09');
+		// Payments on one tenancy never reduce what another owes.
+		recordPayment(db, owner, aina, { amountSen: 50000, paidOn: '2026-09-05', method: 'cash' });
+		recordPayment(db, owner, ben, { amountSen: 10000, paidOn: '2026-09-05', method: 'cash' });
+		recordPayment(db, owner, ben, { amountSen: 30000, paidOn: '2026-09-20', method: 'cash' });
+		recordPayment(db, owner, dina, { amountSen: 90000, paidOn: '2026-09-05', method: 'cash' });
+
+		const client = (db as unknown as { $client: { prepare: (sql: string) => unknown } }).$client;
+		const prepare = vi.spyOn(client, 'prepare');
+		const csv = chargesCsv(db, owner);
+		const queries = prepare.mock.calls.length;
+		prepare.mockRestore();
+		// Stays, charges, payments: not two more per tenancy.
+		expect(queries).toBe(3);
+
+		const unpaid = (name: string, month: string) =>
+			csv
+				.split('\r\n')
+				.find((l) => l.includes(`,${name},`) && l.includes(`,${month},`))
+				?.split(',')
+				.at(-1);
+		expect(unpaid('Aina', '2026-09')).toBe('0.00');
+		expect(unpaid('Aina', '2026-10')).toBe('300.00');
+		expect(unpaid('Ben', '2026-09')).toBe('0.00');
+		expect(unpaid('Ben', '2026-10')).toBe('400.00');
+		expect(unpaid('Chen', '2026-09')).toBe('400.00');
+		expect(unpaid('Dina', '2026-10')).toBe('0.00');
+		expect(csv).not.toContain('Chong');
+		// A month filter shows the same unpaid amounts.
+		expect(chargesCsv(db, owner, '2026-10')).toContain(
+			',Aina,Rumah Uji,Room 1,A,rent,Rent 2026-10,400.00,300.00'
+		);
 	});
 
 	it('exports only the landlord’s payments, optionally for the month paid', () => {

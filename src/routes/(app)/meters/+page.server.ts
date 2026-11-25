@@ -9,6 +9,7 @@ import {
 	rejectReading,
 	setMeterRate
 } from '#lib/server/meter.ts';
+import { translator, type Translator } from '#lib/i18n.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => ({
@@ -17,15 +18,21 @@ export const load: PageServerLoad = ({ locals }) => ({
 
 function kwh(data: FormData): number {
 	const tenths = parseKwh(text(data, 'reading'));
-	if (tenths === null) throw new FormError('Reading: enter the kWh on the meter, like 1234.5');
+	if (tenths === null) throw new FormError('err.kwhInput');
 	return tenths;
 }
 
-function billed(r: { amountSen: number; usedTenths: number | null; shares: unknown[] }) {
-	if (r.usedTenths === null) return 'Opening reading saved; billing starts from the next reading.';
-	if (!r.shares.length)
-		return `${formatKwh(r.usedTenths)} used; nobody stayed in the room, so nothing was billed.`;
-	return `${formatKwh(r.usedTenths)} used: ${formatRM(r.amountSen)} billed${r.shares.length > 1 ? ` across ${r.shares.length} tenants by nights stayed` : ''}.`;
+function billed(
+	t: Translator,
+	r: { amountSen: number; usedTenths: number | null; shares: unknown[] }
+) {
+	if (r.usedTenths === null) return t('ok.billedOpening');
+	const kwh = formatKwh(r.usedTenths);
+	if (!r.shares.length) return t('ok.billedNobody', { kwh });
+	const amount = formatRM(r.amountSen);
+	return r.shares.length > 1
+		? t('ok.billedShared', { kwh, amount, n: r.shares.length })
+		: t('ok.billedOne', { kwh, amount });
 }
 
 export const actions: Actions = {
@@ -34,10 +41,11 @@ export const actions: Actions = {
 		return guard(data, () => {
 			const raw = text(data, 'rate').trim();
 			const rate = raw ? parseRate(raw) : null;
-			if (raw && rate === null) throw new FormError('Rate: enter RM per kWh, like 0.55');
+			if (raw && rate === null) throw new FormError('err.rateInput');
 			setMeterRate(db, locals.user!.id, id(text(data, 'propertyId')), rate);
+			const t = translator(locals.locale);
 			return {
-				success: rate === null ? 'Meter readings turned off' : `Rate set to ${formatRate(rate)}`
+				success: rate === null ? t('ok.metersOff') : t('ok.rateSet', { rate: formatRate(rate) })
 			};
 		});
 	},
@@ -45,7 +53,8 @@ export const actions: Actions = {
 		const data = await request.formData();
 		return guard(data, () => {
 			const r = confirmReading(db, locals.user!.id, id(text(data, 'readingId')), locals.today);
-			return { success: `Reading confirmed. ${billed(r)}` };
+			const t = translator(locals.locale);
+			return { success: t('ok.readingConfirmed', { billed: billed(t, r) }) };
 		});
 	},
 	reject: async ({ request, locals }) => {
@@ -58,7 +67,7 @@ export const actions: Actions = {
 				text(data, 'reason'),
 				locals.today
 			);
-			return { success: 'Reading rejected. The tenant sees your reason and can send it again.' };
+			return { success: translator(locals.locale)('ok.readingRejected') };
 		});
 	},
 	record: async ({ request, locals }) => {
@@ -68,10 +77,11 @@ export const actions: Actions = {
 				db,
 				locals.user!.id,
 				id(text(data, 'roomId')),
-				{ readOn: date(data, 'readOn', 'Read on'), readingTenths: kwh(data) },
+				{ readOn: date(data, 'readOn', 'field.readOn'), readingTenths: kwh(data) },
 				locals.today
 			);
-			return { success: `Reading saved. ${billed(r)}` };
+			const t = translator(locals.locale);
+			return { success: t('ok.readingSaved', { billed: billed(t, r) }) };
 		});
 	}
 };

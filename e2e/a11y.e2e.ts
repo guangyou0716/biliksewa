@@ -67,6 +67,18 @@ test('landlord pages pass the axe audit', async ({ page }) => {
 	await audit(page, 'receipt');
 	await page.goto('/reminders?lang=zh');
 	await audit(page, 'reminders with Chinese messages');
+
+	// The whole landlord side in Chinese and Bahasa Melayu (longer words, different scripts).
+	for (const lang of ['中文', 'BM']) {
+		await page.getByRole('button', { name: new RegExp(`^${lang} – `) }).click();
+		for (const path of ['/', '/properties', '/tenancies', '/billing', '/meters', '/export']) {
+			await page.goto(path);
+			await audit(page, `${path} (${lang})`);
+		}
+		await page.goto('/tenancies');
+		await page.getByRole('link', { name: 'Hafiz Danial' }).click();
+		await audit(page, `tenancy detail (${lang})`);
+	}
 });
 
 test('tenant portal pages pass the axe audit in English and Chinese', async ({ page }) => {

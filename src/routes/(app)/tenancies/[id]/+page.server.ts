@@ -11,6 +11,7 @@ import {
 } from '#lib/server/deposit.ts';
 import { createInvite, portalAccess, revokeAccess } from '#lib/server/portal.ts';
 import { moveOut, recordPayment, RentalError, tenancyLedger } from '#lib/server/rentals.ts';
+import { translate, translator } from '#lib/i18n.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 const METHODS = ['cash', 'bank_transfer', 'other'] as const;
@@ -25,7 +26,7 @@ export const load: PageServerLoad = ({ locals, params }) => {
 			deposit: depositSettlementOf(db, tenancyId)
 		};
 	} catch (e) {
-		if (e instanceof RentalError) error(404, 'Tenancy not found');
+		if (e instanceof RentalError) error(404, translate(locals.locale, 'err.tenancyNotFound'));
 		throw e;
 	}
 };
@@ -35,14 +36,16 @@ export const actions: Actions = {
 		const data = await request.formData();
 		return guard(data, () => {
 			const method = text(data, 'method') as (typeof METHODS)[number];
-			if (!METHODS.includes(method)) throw new FormError('Choose a payment method');
+			if (!METHODS.includes(method)) throw new FormError('err.paymentMethod');
 			const p = recordPayment(db, locals.user!.id, id(params.id), {
-				amountSen: money(data, 'amount', 'Amount'),
-				paidOn: date(data, 'paidOn', 'Paid on'),
+				amountSen: money(data, 'amount', 'field.amount'),
+				paidOn: date(data, 'paidOn', 'field.paidOn'),
 				method,
 				reference: text(data, 'reference')
 			});
-			return { success: `Payment of RM ${(p.amountSen / 100).toFixed(2)} recorded` };
+			return {
+				success: translate(locals.locale, 'ok.paymentRecorded', { amount: formatRM(p.amountSen) })
+			};
 		});
 	},
 	moveOut: async ({ request, locals, params }) => {
@@ -52,14 +55,21 @@ export const actions: Actions = {
 				db,
 				locals.user!.id,
 				id(params.id),
-				date(data, 'endDate', 'Move-out date')
+				date(data, 'endDate', 'field.moveOutDate')
 			);
-			const notes = utility.map(
-				(u) =>
-					`${u.label} ${u.fromDate} to ${u.toDate} re-split by nights stayed: share ${formatRM(u.beforeSen)} → ${formatRM(u.afterSen)}`
+			const t = translator(locals.locale);
+			const notes = utility.map((u) =>
+				t('ok.utilityResplit', {
+					label: u.label,
+					from: u.fromDate,
+					to: u.toDate,
+					before: formatRM(u.beforeSen),
+					after: formatRM(u.afterSen)
+				})
 			);
-			if (rentAdjusted) notes.unshift('Rent re-pro-rated');
-			return { success: ['Move-out recorded', ...notes].join('. ') + '.' };
+			if (rentAdjusted) notes.unshift(t('ok.rentReprorated'));
+			// Chinese sentences end in 。 and are not separated by spaces.
+			return { success: [t('ok.moveOut'), ...notes].join(locals.locale === 'zh' ? '' : ' ') };
 		});
 	},
 	settleDeposit: async ({ request, locals, params }) => {
@@ -73,8 +83,7 @@ export const actions: Actions = {
 				const amount = (amounts[i] ?? '').trim();
 				if (!label && !amount) continue;
 				const amountSen = parseRM(amount);
-				if (!label || amountSen === null)
-					throw new FormError('Each deduction needs a description and an amount like 50.00');
+				if (!label || amountSen === null) throw new FormError('err.deductionInput');
 				deductions.push({ label, amountSen });
 			}
 			const method = text(data, 'refundMethod');
@@ -83,7 +92,7 @@ export const actions: Actions = {
 				locals.user!.id,
 				id(params.id),
 				{
-					settledOn: date(data, 'settledOn', 'Settled on'),
+					settledOn: date(data, 'settledOn', 'field.settledOn'),
 					deductions,
 					refundMethod: REFUND_METHODS.includes(method as RefundMethod)
 						? (method as RefundMethod)
@@ -93,7 +102,10 @@ export const actions: Actions = {
 				locals.today
 			);
 			return {
-				success: `Deposit settled: ${formatRM(s.appliedSen)} used for charges, ${formatRM(s.refundSen)} to refund`
+				success: translate(locals.locale, 'ok.depositSettled', {
+					applied: formatRM(s.appliedSen),
+					refund: formatRM(s.refundSen)
+				})
 			};
 		});
 	},
@@ -102,14 +114,17 @@ export const actions: Actions = {
 		return guard(data, () => {
 			const { token } = createInvite(db, locals.user!.id, id(params.id));
 			// Shown once: only a hash of the token is stored.
-			return { success: 'Invite link created', inviteUrl: `${url.origin}/invite/${token}` };
+			return {
+				success: translate(locals.locale, 'ok.inviteCreated'),
+				inviteUrl: `${url.origin}/invite/${token}`
+			};
 		});
 	},
 	revokePortal: async ({ request, locals, params }) => {
 		const data = await request.formData();
 		return guard(data, () => {
 			revokeAccess(db, locals.user!.id, id(params.id));
-			return { success: 'Portal access removed' };
+			return { success: translate(locals.locale, 'ok.portalRemoved') };
 		});
 	}
 };

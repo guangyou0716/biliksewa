@@ -6,6 +6,7 @@ import {
 	previewUtilitySplit,
 	splitUtilityBill
 } from '#lib/server/rentals.ts';
+import { translator, type Translator } from '#lib/i18n.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => ({
@@ -15,16 +16,17 @@ export const load: PageServerLoad = ({ locals }) => ({
 	}))
 });
 
-const tenancies = (n: number) => `${n} ${n === 1 ? 'tenancy' : 'tenancies'}`;
+const tenancies = (t: Translator, n: number) =>
+	t(n === 1 ? 'count.tenancy' : 'count.tenancies', { n });
 
 function billInput(data: FormData) {
 	return {
 		propertyId: id(text(data, 'propertyId')),
 		label: text(data, 'label'),
-		amountSen: money(data, 'amount', 'Bill amount'),
-		fromDate: date(data, 'fromDate', 'From'),
-		toDate: date(data, 'toDate', 'To'),
-		dueDate: date(data, 'dueDate', 'Due date')
+		amountSen: money(data, 'amount', 'field.billAmount'),
+		fromDate: date(data, 'fromDate', 'field.from'),
+		toDate: date(data, 'toDate', 'field.to'),
+		dueDate: date(data, 'dueDate', 'field.dueDate')
 	};
 }
 
@@ -34,14 +36,15 @@ export const actions: Actions = {
 		return guard(data, () => {
 			const period = month(data, 'period');
 			const r = generateRent(db, locals.user!.id, period);
+			const t = translator(locals.locale);
 			return {
 				rent: {
 					period,
 					...r,
 					message:
 						r.created === 0
-							? `Rent for ${period} was already billed (${tenancies(r.skipped)}).`
-							: `Billed rent for ${period} to ${tenancies(r.created)}.`
+							? t('ok.rentAlready', { period, count: tenancies(t, r.skipped) })
+							: t('ok.rentBilled', { period, count: tenancies(t, r.created) })
 				}
 			};
 		});

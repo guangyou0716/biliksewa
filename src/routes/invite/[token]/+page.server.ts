@@ -10,6 +10,7 @@ import { text } from '#lib/server/forms.ts';
 import { acceptInvite, inviteDetails } from '#lib/server/portal.ts';
 import { inviteByAddress, minutes } from '#lib/server/rate-limit.ts';
 import { RentalError } from '#lib/server/rentals.ts';
+import { translate } from '#lib/i18n.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ params, getClientAddress, setHeaders }) => {
@@ -24,23 +25,26 @@ export const load: PageServerLoad = ({ params, getClientAddress, setHeaders }) =
 };
 
 export const actions: Actions = {
-	default: async ({ request, params, cookies, url, getClientAddress }) => {
+	default: async ({ request, params, cookies, url, getClientAddress, locals }) => {
 		const data = await request.formData();
 		const email = text(data, 'email');
 		const password = text(data, 'password');
 		const address = getClientAddress();
 		const wait = inviteByAddress.retryAfter(address);
 		if (wait > 0)
-			return fail(429, { email, error: `Too many attempts. Try again in ${minutes(wait)} min.` });
+			return fail(429, {
+				email,
+				error: translate(locals.locale, 'err.tooManyAttempts', { minutes: minutes(wait) })
+			});
 		if (password !== text(data, 'confirm'))
-			return fail(400, { email, error: 'The passwords do not match' });
+			return fail(400, { email, error: translate(locals.locale, 'err.passwordMismatch') });
 		let account;
 		try {
 			account = await acceptInvite(db, params.token, { email, password });
 		} catch (e) {
 			if (e instanceof RentalError) {
 				if (!inviteDetails(db, params.token)) inviteByAddress.fail(address);
-				return fail(400, { email, error: e.message });
+				return fail(400, { email, error: e.localized(locals.locale) });
 			}
 			throw e;
 		}

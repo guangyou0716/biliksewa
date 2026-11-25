@@ -5,6 +5,7 @@
 	import Ledger from '#lib/components/Ledger.svelte';
 	import Stat from '#lib/components/Stat.svelte';
 	import { settlementAmounts } from '#lib/billing.ts';
+	import { t } from '#lib/i18n.svelte.ts';
 	import { formatRM, parseRM } from '#lib/money.ts';
 	import type { PageProps } from './$types';
 
@@ -32,39 +33,48 @@
 
 <svelte:head><title>{l.tenant.name} · biliksewa</title></svelte:head>
 
-<a href="/tenancies" class="text-sm text-brand-700 hover:underline">← Tenants</a>
+<a href="/tenancies" class="text-sm text-brand-700 hover:underline">{t('tenancy.back')}</a>
 <div class="mt-1 flex flex-wrap items-baseline gap-3">
 	<h1 class="text-2xl font-semibold">{l.tenant.name}</h1>
 	{#if l.tenancy.endDate}
-		<span class="badge bg-slate-100 text-slate-600">Moved out {l.tenancy.endDate}</span>
+		<span class="badge bg-slate-100 text-slate-600">
+			{t('common.movedOut', { date: l.tenancy.endDate })}
+		</span>
 	{:else}
-		<span class="badge bg-brand-100 text-brand-700">Staying</span>
+		<span class="badge bg-brand-100 text-brand-700">{t('portal.staying')}</span>
 	{/if}
 </div>
 <p class="text-sm text-slate-500">
-	<a class="hover:underline" href="/properties/{l.property.id}">{l.property.name}</a> · {l.room
-		.name} · Bed
-	{l.bed.label} · since {l.tenancy.startDate} · {formatRM(l.tenancy.monthlyRentSen)}/month · deposit
-	held
-	{formatRM(l.tenancy.depositSen)}
+	<a class="hover:underline" href="/properties/{l.property.id}">{l.property.name}</a> ·
+	{t('tenancy.details', {
+		room: l.room.name,
+		bed: t('common.bed', { label: l.bed.label }),
+		start: l.tenancy.startDate,
+		rent: formatRM(l.tenancy.monthlyRentSen),
+		deposit: formatRM(l.tenancy.depositSen)
+	})}
 </p>
 
 <p class="mt-2">
-	<a class="btn-secondary" href="/tenancies/{l.tenancy.id}/statement">Monthly statement</a>
+	<a class="btn-secondary" href="/tenancies/{l.tenancy.id}/statement">
+		{t('portal.statement')}
+	</a>
 </p>
 
 <div class="mt-4">
 	<FormMessage error={form?.error} success={form && 'success' in form ? form.success : null} />
 </div>
 
-<section aria-label="Balance" class="mt-4 grid gap-4 sm:grid-cols-3">
-	<Stat label="Billed" value={formatRM(l.chargedSen)} />
-	<Stat label="Paid" value={formatRM(l.paidSen)} tone="good" />
+<section aria-label={t('portal.balanceGroup')} class="mt-4 grid gap-4 sm:grid-cols-3">
+	<Stat label={t('portal.billed')} value={formatRM(l.chargedSen)} />
+	<Stat label={t('portal.paid')} value={formatRM(l.paidSen)} tone="good" />
 	<Stat
-		label="Balance"
+		label={t('portal.balance')}
 		value={formatRM(l.balanceSen)}
 		tone={l.overdueSen > 0 ? 'warn' : 'default'}
-		hint={l.overdueSen > 0 ? `${formatRM(l.overdueSen)} overdue` : 'Nothing overdue'}
+		hint={l.overdueSen > 0
+			? t('portal.overdue', { amount: formatRM(l.overdueSen) })
+			: t('portal.nothingOverdue')}
 	/>
 </section>
 
@@ -81,49 +91,51 @@
 
 	<div class="space-y-6">
 		<form method="POST" action="?/pay" use:enhance class="card space-y-3">
-			<h2 class="font-semibold">Record payment</h2>
+			<h2 class="font-semibold">{t('tenancy.recordPayment')}</h2>
 			<label class="label">
-				Amount (RM) <input class="field" name="amount" required inputmode="decimal" />
+				{t('tenancy.amountRM')}
+				<input class="field" name="amount" required inputmode="decimal" />
 			</label>
 			<label class="label">
-				Paid on <input class="field" type="date" name="paidOn" required defaultValue={data.today} />
+				{t('field.paidOn')}
+				<input class="field" type="date" name="paidOn" required defaultValue={data.today} />
 			</label>
 			<label class="label">
-				Method
+				{t('col.method')}
 				<select class="field" name="method">
-					<option value="bank_transfer">Bank transfer</option>
-					<option value="cash">Cash</option>
-					<option value="other">Other</option>
+					<option value="bank_transfer">{t('method.bank_transfer')}</option>
+					<option value="cash">{t('method.cash')}</option>
+					<option value="other">{t('method.other')}</option>
 				</select>
 			</label>
-			<label class="label">Reference (optional) <input class="field" name="reference" /></label>
-			<button class="btn w-full">Record payment</button>
-			<p class="text-xs text-slate-500">Recorded manually. No payment gateway is involved.</p>
+			<label class="label">
+				{t('tenancy.reference')}
+				<input class="field" name="reference" />
+			</label>
+			<button class="btn w-full">{t('tenancy.recordPayment')}</button>
+			<p class="text-xs text-slate-500">{t('tenancy.manual')}</p>
 		</form>
 
 		<section class="card space-y-3" aria-labelledby="portal-h">
-			<h2 id="portal-h" class="font-semibold">Tenant portal</h2>
+			<h2 id="portal-h" class="font-semibold">{t('tenancy.portal')}</h2>
 			{#if data.portal.account}
 				<p class="text-sm text-slate-600">
-					Active. {l.tenant.name} signs in as <strong>{data.portal.account.email}</strong> and sees only
-					this ledger.
+					{t('tenancy.portalActive', { name: l.tenant.name, email: data.portal.account.email })}
 				</p>
 				<form
 					method="POST"
 					action="?/revokePortal"
 					use:enhance={({ cancel }) => {
-						if (!confirm(`Remove portal access for ${l.tenant.name}?`)) cancel();
+						if (!confirm(t('tenancy.confirmRevoke', { name: l.tenant.name }))) cancel();
 					}}
 				>
-					<button class="btn-secondary w-full">Remove portal access</button>
+					<button class="btn-secondary w-full">{t('tenancy.revoke')}</button>
 				</form>
 			{:else}
-				<p class="text-sm text-slate-600">
-					Send {l.tenant.name} a one-time link so they can check their own rent, bills and receipts.
-				</p>
+				<p class="text-sm text-slate-600">{t('tenancy.inviteIntro', { name: l.tenant.name })}</p>
 				{#if inviteUrl}
 					<label class="label">
-						Invite link (shown once, valid 7 days)
+						{t('tenancy.inviteLink')}
 						<input
 							bind:this={linkInput}
 							class="field font-mono text-xs"
@@ -133,14 +145,18 @@
 					</label>
 					<div class="flex gap-2">
 						<button type="button" class="btn-secondary flex-1" onclick={() => copy(inviteUrl)}>
-							{copied ? 'Copied' : 'Copy link'}
+							{copied ? t('reminders.copied') : t('tenancy.copyLink')}
 						</button>
 						<a
 							class="btn-secondary flex-1"
 							target="_blank"
 							rel="noopener noreferrer"
 							href="https://wa.me/?text={encodeURIComponent(
-								`Hi ${l.tenant.name}, check your rent and payments for ${l.property.name} here: ${inviteUrl}`
+								t('tenancy.whatsapp', {
+									name: l.tenant.name,
+									property: l.property.name,
+									url: inviteUrl
+								})
 							)}"
 						>
 							WhatsApp
@@ -148,8 +164,7 @@
 					</div>
 				{:else if data.portal.inviteExpiresOn}
 					<p class="text-xs text-slate-500">
-						An invite link is open until {data.portal.inviteExpiresOn}. Creating a new one cancels
-						it.
+						{t('tenancy.inviteOpen', { date: data.portal.inviteExpiresOn })}
 					</p>
 				{/if}
 				<form
@@ -161,7 +176,7 @@
 					}}
 				>
 					<button class="btn w-full">
-						{inviteUrl ? 'Create a new link' : 'Create invite link'}
+						{inviteUrl ? t('tenancy.newLink') : t('tenancy.createLink')}
 					</button>
 				</form>
 			{/if}
@@ -169,85 +184,83 @@
 
 		{#if l.tenancy.endDate && l.tenancy.endDate > data.today && !data.deposit && l.tenancy.depositSen > 0}
 			<p class="card text-sm text-slate-500">
-				The deposit can be settled from the move-out day ({l.tenancy.endDate}).
+				{t('tenancy.settleFrom', { date: l.tenancy.endDate })}
 			</p>
 		{:else if l.tenancy.endDate && !data.deposit && l.tenancy.depositSen > 0}
 			<form method="POST" action="?/settleDeposit" use:enhance class="card space-y-3">
-				<h2 class="font-semibold">Settle deposit</h2>
+				<h2 class="font-semibold">{t('tenancy.settle')}</h2>
 				<p class="text-xs text-slate-500">
-					The deposit of {formatRM(l.tenancy.depositSen)} pays the deductions first, then any unpaid rent
-					and bills; the rest is refunded.
+					{t('tenancy.settleIntro', { deposit: formatRM(l.tenancy.depositSen) })}
 				</p>
 				<label class="label">
-					Settled on
+					{t('field.settledOn')}
 					<input class="field" type="date" name="settledOn" required defaultValue={data.today} />
 				</label>
 				<fieldset class="space-y-2">
-					<legend class="text-sm font-medium text-slate-700">Deductions (optional)</legend>
+					<legend class="text-sm font-medium text-slate-700">{t('tenancy.deductions')}</legend>
 					{#each Array.from({ length: 3 }, (_, i) => i) as i (i)}
 						<div class="flex gap-2">
 							<input
 								class="field flex-1"
 								name="deductionLabel"
-								aria-label="Deduction {i + 1} description"
-								placeholder={i === 0 ? 'e.g. Cleaning' : ''}
+								aria-label={t('tenancy.deductionDesc', { n: i + 1 })}
+								placeholder={i === 0 ? t('tenancy.deductionExample') : ''}
 							/>
 							<input
 								class="field w-28"
 								name="deductionAmount"
 								inputmode="decimal"
-								aria-label="Deduction {i + 1} amount (RM)"
+								aria-label={t('tenancy.deductionAmount', { n: i + 1 })}
 								placeholder="RM"
 								bind:value={deductionAmounts[i]}
 							/>
 						</div>
 					{/each}
 				</fieldset>
-				<dl class="space-y-1 text-sm" aria-label="Settlement preview">
+				<dl class="space-y-1 text-sm" aria-label={t('tenancy.preview')}>
 					<div class="flex justify-between">
-						<dt class="text-slate-500">Used for charges</dt>
+						<dt class="text-slate-500">{t('tenancy.usedForCharges')}</dt>
 						<dd class="tabular-nums">{formatRM(preview.appliedSen)}</dd>
 					</div>
 					<div class="flex justify-between font-semibold">
-						<dt>Refund</dt>
+						<dt>{t('deposit.refund')}</dt>
 						<dd class="tabular-nums">{formatRM(preview.refundSen)}</dd>
 					</div>
 					{#if preview.balanceAfterSen > 0}
 						<p class="text-xs text-amber-700">
-							{formatRM(preview.balanceAfterSen)} stays owing after the whole deposit is used.
+							{t('tenancy.stillOwing', { amount: formatRM(preview.balanceAfterSen) })}
 						</p>
 					{:else if preview.balanceAfterSen < 0}
 						<p class="text-xs text-slate-500">
-							The tenant also has {formatRM(-preview.balanceAfterSen)} credit, not included in the refund.
+							{t('tenancy.credit', { amount: formatRM(-preview.balanceAfterSen) })}
 						</p>
 					{/if}
 				</dl>
 				<label class="label">
-					Refund paid by
+					{t('tenancy.refundBy')}
 					<select class="field" name="refundMethod">
-						<option value="bank_transfer">Bank transfer</option>
-						<option value="cash">Cash</option>
-						<option value="other">Other</option>
+						<option value="bank_transfer">{t('method.bank_transfer')}</option>
+						<option value="cash">{t('method.cash')}</option>
+						<option value="other">{t('method.other')}</option>
 					</select>
 				</label>
 				<label class="label">
-					Refund reference (optional) <input class="field" name="refundReference" />
+					{t('tenancy.refundRef')}
+					<input class="field" name="refundReference" />
 				</label>
-				<button class="btn w-full">Settle deposit</button>
+				<button class="btn w-full">{t('tenancy.settle')}</button>
 			</form>
 		{/if}
 
 		{#if !l.tenancy.endDate}
 			<form method="POST" action="?/moveOut" use:enhance class="card space-y-3">
-				<h2 class="font-semibold">Move out</h2>
+				<h2 class="font-semibold">{t('tenancy.moveOut')}</h2>
 				<label class="label">
-					Move-out date <input class="field" type="date" name="endDate" required />
+					{t('field.moveOutDate')}
+					<input class="field" type="date" name="endDate" required />
 				</label>
-				<p class="text-xs text-slate-500">
-					The tenant's last night is the night before this date. Rent and house bills already billed
-					past it are corrected.
-				</p>
-				<button class="btn-secondary w-full">Record move-out</button>
+				<p class="text-xs text-slate-500">{t('tenancy.moveOutNote')}</p>
+				<button class="btn-secondary w-full">{t('tenancy.recordMoveOut')}</button>
 			</form>
 		{/if}
 	</div>
