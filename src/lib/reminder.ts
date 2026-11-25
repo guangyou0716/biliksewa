@@ -1,5 +1,6 @@
 import { toDayNumber } from './dates';
 import { formatRM } from './money';
+import { dayCount, DEFAULT_LOCALE, translator, type Locale } from './i18n';
 
 /** Whole days from `dueDate` to `today` (0 on the due date itself, never negative). */
 export function daysOverdue(dueDate: string, today: string): number {
@@ -15,6 +16,7 @@ export interface ReminderItem {
 /**
  * A polite reminder the landlord can copy into WhatsApp, SMS or email. biliksewa never sends it.
  * Only what the tenant already sees in their own ledger goes in; no bank details are added.
+ * Written in `locale` (the landlord picks the tenant's language); charge descriptions stay as stored.
  */
 export function reminderMessage(input: {
 	tenantName: string;
@@ -22,16 +24,26 @@ export function reminderMessage(input: {
 	where: string;
 	today: string;
 	items: ReminderItem[];
+	locale?: Locale;
 }): string {
+	const t = translator(input.locale ?? DEFAULT_LOCALE);
 	const total = input.items.reduce((s, i) => s + i.unpaidSen, 0);
-	const lines = input.items.map((i) => {
-		const days = daysOverdue(i.dueDate, input.today);
-		return `- ${i.description} (due ${i.dueDate}): ${formatRM(i.unpaidSen)}, ${days} ${days === 1 ? 'day' : 'days'} overdue`;
-	});
+	const lines = input.items.map((i) =>
+		t('reminder.item', {
+			description: i.description,
+			due: i.dueDate,
+			amount: formatRM(i.unpaidSen),
+			days: dayCount(t, daysOverdue(i.dueDate, input.today))
+		})
+	);
 	return [
-		`Hi ${input.tenantName}, this is a friendly reminder from ${input.landlordName} about ${input.where}.`,
-		`As of ${input.today}, ${formatRM(total)} is overdue:`,
+		t('reminder.greeting', {
+			tenant: input.tenantName,
+			landlord: input.landlordName,
+			where: input.where
+		}),
+		t('reminder.asOf', { today: input.today, total: formatRM(total) }),
 		...lines,
-		'Please pay when you can and send me the transfer reference. If you have already paid, please ignore this message. Thank you!'
+		t('reminder.closing')
 	].join('\n');
 }

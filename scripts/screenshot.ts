@@ -59,8 +59,11 @@ await tenant.getByLabel('Password').fill('demo-tenant');
 await tenant.getByRole('button', { name: 'Sign in' }).click();
 await tenant.waitForURL(`${base}/portal`);
 await tenant.screenshot({ path: 'docs/tenant-portal.png', fullPage: true });
+await tenant.getByRole('button', { name: /^BM – / }).click();
+await tenant.getByRole('heading', { name: /^Hai, / }).waitFor();
+await tenant.screenshot({ path: 'docs/tenant-portal-ms.png', fullPage: true });
 
 await browser.close();
 console.log(
-	'Saved docs/dashboard.png, docs/property-board.png, docs/bill-split.png, docs/tenant-portal.png, docs/deposit-settlement.png, docs/meter-readings.png, docs/overdue-reminders.png, docs/monthly-statement.png'
+	'Saved docs/dashboard.png, docs/property-board.png, docs/bill-split.png, docs/tenant-portal.png, docs/tenant-portal-ms.png, docs/deposit-settlement.png, docs/meter-readings.png, docs/overdue-reminders.png, docs/monthly-statement.png'
 );

@@ -50,11 +50,22 @@ change the demo data, and it goes back to the sample data every hour.
   only their own statements; anything else is a 404.
 - **CSV export** of charges (with what is still unpaid on each) and payments (with receipt numbers) for one
   month or all months, for Excel, Google Sheets or an accountant. Amounts are plain decimals from integer
-  sen. Text cells starting with `=`, `+`, `-`, `@`, tab or carriage return are prefixed with `'` so a name
-  like `=HYPERLINK(...)` can't run as a spreadsheet formula.
+  sen. Text cells starting with `=`, `+`, `-`, `@`, tab or carriage return (also after leading spaces, and
+  the full-width `＝＋－＠`) are prefixed with `'` so a name like `=HYPERLINK(...)` can't run as a
+  spreadsheet formula.
 - **Overdue reminders**: who owes what, charge by charge, with days overdue (payments applied oldest first;
   moved-out tenants who still owe are included) and a ready-made polite reminder message to copy into
-  WhatsApp, SMS or email. biliksewa never sends anything itself.
+  WhatsApp, SMS or email, written in English, Bahasa Melayu or Simplified Chinese (pick the tenant's
+  language per page, independent of your own). biliksewa never sends anything itself.
+- **Three languages**: English, Bahasa Melayu and 简体中文. The EN / BM / 中文 picker in the header (and on
+  the sign-in and invite pages) is a plain form, so it works without JavaScript; the choice is kept in a
+  cookie for a year, and until then the browser's language is used. Translated so far: navigation, sign-in,
+  invite, the whole tenant portal (ledger, meter readings, deposit, statements, receipts, the downloaded
+  statement file) and overdue reminders including the message text. The other landlord pages (dashboard,
+  properties, tenancies, billing, meters, export) are still English only. Names and charge descriptions are
+  shown as entered. A unit test checks that every language has every message with the same placeholders.
+- **Accessibility**: every page is audited with axe-core (WCAG 2.1 A/AA rules) in the Playwright tests, in
+  English plus BM/Chinese for the public pages and the portal; `<html lang>` follows the chosen language.
 - **Tenant portal**: the landlord creates a one-time invite link (valid 7 days, copy or share on WhatsApp).
   The tenant picks a password and then sees only their own stay, charges, payments and printable payment
   receipts. Landlord pages are closed to tenant accounts, and another tenant's receipt is a 404, the same as
@@ -67,6 +78,7 @@ change the demo data, and it goes back to the sample data every hour.
 ![Property board](docs/property-board.png)
 ![Bill split](docs/bill-split.png)
 ![Tenant portal](docs/tenant-portal.png)
+![Tenant portal in Bahasa Melayu](docs/tenant-portal-ms.png)
 ![Deposit settlement](docs/deposit-settlement.png)
 ![Meter readings](docs/meter-readings.png)
 ![Overdue reminders](docs/overdue-reminders.png)
@@ -74,8 +86,9 @@ change the demo data, and it goes back to the sample data every hour.
 
 ## Stack
 
-SvelteKit (Svelte 5) + TypeScript, Drizzle ORM + SQLite, Tailwind CSS v4, Vitest, Playwright, GitHub Actions.
-Money is stored as integer sen.
+SvelteKit (Svelte 5) + TypeScript, Drizzle ORM + SQLite, Tailwind CSS v4, Vitest, Playwright + axe-core,
+Docker, GitHub Actions. Translations are plain TypeScript objects (no i18n library). Money is stored as
+integer sen.
 
 ## Run locally
 
@@ -93,9 +106,26 @@ Open <http://localhost:5173> and sign in with one of the demo accounts above.
 | Command                           | What it does                                          |
 | --------------------------------- | ----------------------------------------------------- |
 | `npm test`                        | unit and integration tests (Vitest, in-memory SQLite) |
-| `npm run test:e2e`                | Playwright tests against the built app                |
+| `npm run test:e2e`                | Playwright tests (incl. axe audit) on the built app   |
 | `npm run lint` / `npm run check`  | Prettier + ESLint / svelte-check                      |
 | `npm run build` then `node build` | production build for Node (adapter-node)              |
+
+## Run with Docker
+
+The image runs the Node build (adapter-node) as a non-root user with the SQLite database on a named
+volume; migrations are applied on start.
+
+```sh
+docker compose up -d --build    # http://localhost:3000
+docker compose logs -f app
+docker compose down             # add -v to delete the database volume
+```
+
+On first start with an empty volume it fills in the synthetic demo accounts above
+(`BILIKSEWA_SEED_DEMO=1`, the default in `docker-compose.yml`); an existing database is never touched.
+For real use set `BILIKSEWA_SEED_DEMO=0`, and set `BILIKSEWA_ORIGIN` to the address people open (for
+example `https://sewa.example.com` behind a TLS proxy), because SvelteKit checks it on form posts. CI
+builds the image, starts it and signs in to the seeded demo on every push.
 
 ## Public demo on Cloudflare
 

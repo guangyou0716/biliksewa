@@ -1,18 +1,20 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import LocalePicker from '#lib/components/LocalePicker.svelte';
+	import { t } from '#lib/i18n.svelte.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
 
-	const links = [
-		{ href: '/', label: 'Dashboard' },
-		{ href: '/properties', label: 'Properties' },
-		{ href: '/tenancies', label: 'Tenants' },
-		{ href: '/billing', label: 'Billing' },
-		{ href: '/meters', label: 'Meters' },
-		{ href: '/reminders', label: 'Reminders' },
-		{ href: '/export', label: 'Export' }
-	];
+	const links = $derived([
+		{ href: '/', label: t('nav.dashboard') },
+		{ href: '/properties', label: t('nav.properties') },
+		{ href: '/tenancies', label: t('nav.tenants') },
+		{ href: '/billing', label: t('nav.billing') },
+		{ href: '/meters', label: t('nav.meters') },
+		{ href: '/reminders', label: t('nav.reminders') },
+		{ href: '/export', label: t('nav.export') }
+	]);
 	const active = (href: string) =>
 		href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
 </script>
@@ -30,7 +32,7 @@
 				biliksewa
 			</a>
 			<nav
-				aria-label="Main"
+				aria-label={t('nav.main')}
 				class="order-3 flex w-full gap-1 overflow-x-auto sm:order-none sm:w-auto"
 			>
 				{#each links as link (link.href)}
@@ -46,9 +48,10 @@
 				{/each}
 			</nav>
 			<div class="ml-auto flex items-center gap-3 text-sm text-slate-600">
+				<LocalePicker />
 				<span class="hidden sm:inline">{data.user.name}</span>
 				<form method="POST" action="/logout">
-					<button class="btn-secondary px-3 py-1.5">Sign out</button>
+					<button class="btn-secondary px-3 py-1.5">{t('common.signOut')}</button>
 				</form>
 			</div>
 		</div>
@@ -56,7 +59,7 @@
 	<main class="mx-auto max-w-6xl px-4 py-6">
 		{@render children()}
 	</main>
-	<footer class="mx-auto max-w-6xl px-4 pb-8 text-xs text-slate-400 print:hidden">
-		Demo data is synthetic. Today in Malaysia: {data.today}
+	<footer class="mx-auto max-w-6xl px-4 pb-8 text-xs text-slate-500 print:hidden">
+		{t('footer.app', { today: data.today })}
 	</footer>
 </div>

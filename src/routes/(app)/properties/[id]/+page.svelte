@@ -49,7 +49,7 @@
 							>
 								{b.occupant.tenantName}
 							</a>
-							<p class="text-xs text-slate-500">
+							<p class="text-xs text-slate-600">
 								{formatRM(b.occupant.rentSen)}/month · since {b.occupant.startDate}
 							</p>
 						{:else}

@@ -54,3 +54,29 @@ jobs:
           name: playwright-traces
           path: test-results/
           retention-days: 7
+
+  docker:
+    name: Docker image (adapter-node) build and smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: build the image
+        run: docker compose build
+      - name: start with demo data and wait for the health check
+        run: docker compose up -d --wait --wait-timeout 120
+      - name: smoke test (page, language, migrations, seeded sign-in)
+        run: |
+          curl -fsS http://localhost:3000/login | grep -q 'Sign in'
+          curl -fsS -H 'Accept-Language: ms' http://localhost:3000/login | grep -q '<html lang="ms"'
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            -H 'Origin: http://localhost:3000' -H 'Accept: text/html' \
+            --data-urlencode 'email=demo@biliksewa.test' --data-urlencode 'password=demo-landlord' \
+            http://localhost:3000/login)
+          test "$code" = 303
+          docker compose exec -T app id -un | grep -qx node
+      - name: container logs
+        if: always()
+        run: docker compose logs
+      - name: stop
+        if: always()
+        run: docker compose down -v

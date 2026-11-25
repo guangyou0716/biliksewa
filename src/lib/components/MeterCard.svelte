@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { formatKwh, formatRate } from '#lib/meter.ts';
 	import { formatRM } from '#lib/money.ts';
+	import { t } from '#lib/i18n.svelte.ts';
 
 	interface Reading {
 		id: number;
@@ -54,10 +55,9 @@
 			const files = new DataTransfer();
 			files.items.add(new File([blob], 'meter.jpg', { type: 'image/jpeg' }));
 			input.files = files.files;
-			photoNote = `Photo resized to ${Math.round(blob.size / 1000)} KB.`;
+			photoNote = t('meter.resized', { kb: Math.round(blob.size / 1000) });
 		} catch {
-			photoNote =
-				'This photo is too large (max 300 KB). Try a smaller one, or send without a photo.';
+			photoNote = t('meter.tooLarge');
 			input.value = '';
 		}
 	}
@@ -70,20 +70,22 @@
 
 {#if meter.enabled || meter.readings.length}
 	<section class="card space-y-3" aria-labelledby="{uid}-meter">
-		<h3 id="{uid}-meter" class="font-semibold">Electricity meter (your room)</h3>
+		<h3 id="{uid}-meter" class="font-semibold">{t('meter.heading')}</h3>
 		<p class="text-sm text-slate-600">
-			{#if meter.rate !== null}Billed at {formatRate(meter.rate)}.{/if}
+			{#if meter.rate !== null}{t('meter.billedAt', { rate: formatRate(meter.rate) })}{/if}
 			{#if meter.lastConfirmed}
-				Last confirmed reading: <strong>{formatKwh(meter.lastConfirmed.readingTenths)}</strong> on
-				{meter.lastConfirmed.readOn}.
+				{t('meter.lastConfirmed', {
+					kwh: formatKwh(meter.lastConfirmed.readingTenths),
+					date: meter.lastConfirmed.readOn
+				})}
 			{:else}
-				No confirmed reading yet.
+				{t('meter.noConfirmed')}
 			{/if}
 		</p>
 
 		{#if active && meter.enabled && meter.pending}
 			<p class="text-sm text-slate-500">
-				A reading for your room is waiting for the landlord to check it.
+				{t('meter.waiting')}
 			</p>
 		{:else if active && meter.enabled}
 			<form
@@ -95,11 +97,12 @@
 			>
 				<input type="hidden" name="tenancyId" value={tenancyId} />
 				<label class="label">
-					Reading (kWh)
+					{t('meter.reading')}
 					<input class="field" name="reading" required inputmode="decimal" placeholder="1234.5" />
 				</label>
 				<label class="label">
-					Read on <input
+					{t('col.readOn')}
+					<input
 						class="field"
 						type="date"
 						name="readOn"
@@ -109,7 +112,7 @@
 					/>
 				</label>
 				<label class="label">
-					Photo (optional)
+					{t('meter.photo')}
 					<input
 						class="mt-1 block w-full text-sm text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium"
 						type="file"
@@ -119,7 +122,7 @@
 					/>
 				</label>
 				{#if photoNote}<p class="text-xs text-slate-500 sm:col-span-3">{photoNote}</p>{/if}
-				<button class="btn sm:col-span-3 sm:justify-self-start">Send reading</button>
+				<button class="btn sm:col-span-3 sm:justify-self-start">{t('meter.send')}</button>
 			</form>
 		{/if}
 
@@ -127,7 +130,8 @@
 			<table class="table">
 				<thead>
 					<tr>
-						<th>Read on</th><th>Reading</th><th>Status</th><th class="text-right">Your share</th>
+						<th>{t('col.readOn')}</th><th>{t('col.reading')}</th><th>{t('col.status')}</th>
+						<th class="text-right">{t('col.yourShare')}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -138,34 +142,32 @@
 								{formatKwh(r.readingTenths)}
 								{#if r.mine && r.hasPhoto}
 									<a
-										class="ml-1 text-xs text-brand-700 hover:underline"
+										class="ml-1 text-xs text-brand-700 underline"
 										href="/portal/readings/{r.id}/photo"
 									>
-										photo
+										{t('meter.photoLink')}
 									</a>
 								{/if}
 							</td>
 							<td>
 								<span class="badge {statusClass[r.status]}">
-									{r.status === 'pending'
-										? 'Waiting'
-										: r.status === 'confirmed'
-											? 'Confirmed'
-											: 'Rejected'}
+									{t(`meter.status.${r.status}`)}
 								</span>
 								{#if r.status === 'rejected' && r.rejectReason}
-									<span class="block text-xs text-red-700">Reason: {r.rejectReason}</span>
+									<span class="block text-xs text-red-700">
+										{t('meter.reason', { reason: r.rejectReason })}
+									</span>
 								{/if}
 							</td>
 							<td class="text-right tabular-nums">
 								{#if r.shareSen !== null}
 									{formatRM(r.shareSen)}
 								{:else if r.status === 'confirmed' && r.usedTenths === null}
-									<span class="text-xs text-slate-500">Opening reading</span>
+									<span class="text-xs text-slate-500">{t('meter.opening')}</span>
 								{:else}—{/if}
 								{#if r.usedTenths !== null}
 									<span class="block text-xs text-slate-500">
-										{formatKwh(r.usedTenths)} used by the room
+										{t('meter.used', { kwh: formatKwh(r.usedTenths) })}
 									</span>
 								{/if}
 							</td>

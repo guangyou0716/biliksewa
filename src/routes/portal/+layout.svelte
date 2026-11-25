@@ -1,4 +1,6 @@
 <script lang="ts">
+	import LocalePicker from '#lib/components/LocalePicker.svelte';
+	import { t } from '#lib/i18n.svelte.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -15,12 +17,13 @@
 					bs
 				</span>
 				biliksewa
-				<span class="badge bg-slate-100 text-slate-600">Tenant</span>
+				<span class="badge bg-slate-100 text-slate-600">{t('common.tenant')}</span>
 			</a>
 			<div class="ml-auto flex items-center gap-3 text-sm text-slate-600">
+				<LocalePicker />
 				<span class="hidden sm:inline">{data.user.name}</span>
 				<form method="POST" action="/logout">
-					<button class="btn-secondary px-3 py-1.5">Sign out</button>
+					<button class="btn-secondary px-3 py-1.5">{t('common.signOut')}</button>
 				</form>
 			</div>
 		</div>
@@ -28,8 +31,7 @@
 	<main class="mx-auto max-w-4xl px-4 py-6">
 		{@render children()}
 	</main>
-	<footer class="mx-auto max-w-4xl px-4 pb-8 text-xs text-slate-400 print:hidden">
-		Read-only view of your own account. Questions about a charge? Ask your landlord. Today in
-		Malaysia: {data.today}
+	<footer class="mx-auto max-w-4xl px-4 pb-8 text-xs text-slate-500 print:hidden">
+		{t('footer.portal', { today: data.today })}
 	</footer>
 </div>

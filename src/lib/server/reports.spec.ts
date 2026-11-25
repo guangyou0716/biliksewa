@@ -151,6 +151,23 @@ describe('monthly statements', () => {
 		expect(statementFileName(s)).toBe(`biliksewa-statement-${t}-2026-09.html`);
 		expect(escapeHtml(`a&b"'`)).toBe('a&amp;b&quot;&#39;');
 	});
+
+	it('labels the downloaded file in the viewer’s language, keeping stored text as entered', () => {
+		const [t] = house(owner, 'Rumah Uji', ['<i>Aina</i>']);
+		generateRent(db, owner, '2026-09');
+		const s = landlordStatement(db, owner, t, '2026-09');
+		const ms = statementHtml(s, '2026-11-26', 'ms');
+		expect(ms).toContain('<html lang="ms">');
+		expect(ms).toContain('Penyata bulanan 2026-09');
+		expect(ms).toContain('Baki dibawa ke hadapan');
+		expect(ms).toContain('Rent 2026-09');
+		expect(ms).toContain('&lt;i&gt;Aina&lt;/i&gt;');
+		const zh = statementHtml(s, '2026-11-26', 'zh');
+		expect(zh).toContain('<html lang="zh-Hans">');
+		expect(zh).toContain('2026-09 月结单');
+		expect(zh).not.toContain('<i>');
+		expect(statementHtml(s, '2026-11-26')).toContain('<html lang="en">');
+	});
 });
 
 describe('landlord receipts', () => {
@@ -291,5 +308,17 @@ describe('overdue reminders', () => {
 		moveOut(db, owner, t, '2026-09-20');
 		const [r] = overdueReminders(db, owner, '2026-11-26');
 		expect(r).toMatchObject({ active: false, endDate: '2026-09-20', daysOverdue: 80 });
+	});
+
+	it('writes the messages in the chosen language', () => {
+		house(owner, 'Rumah Uji', ['Aina']);
+		generateRent(db, owner, '2026-10');
+		const [ms] = overdueReminders(db, owner, '2026-11-26', 'ms');
+		expect(ms.message).toMatch(/^Hai Aina, ini peringatan mesra/);
+		expect(ms.message).toContain('Katil ');
+		expect(ms.message).toContain('tertunggak 50 hari');
+		const [zh] = overdueReminders(db, owner, '2026-11-26', 'zh');
+		expect(zh.message).toContain('已逾期 50 天');
+		expect(zh.where).toContain('床位 ');
 	});
 });

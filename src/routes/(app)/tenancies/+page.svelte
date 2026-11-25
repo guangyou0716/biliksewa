@@ -45,7 +45,7 @@
 					<td
 						class="text-right tabular-nums {t.overdueSen > 0
 							? 'font-medium text-amber-700'
-							: 'text-slate-400'}"
+							: 'text-slate-500'}"
 					>
 						{formatRM(t.overdueSen)}
 					</td>
