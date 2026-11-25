@@ -205,6 +205,104 @@ describe('utility bill split', () => {
 		).toThrow(/already split/);
 	});
 
+	it('re-splits a bill already billed when a tenant moves out within its period', () => {
+		const { p, a, b } = house();
+		const t1 = tenantOn(a.id, '2026-09-01', 40000, 'Stayer');
+		const t2 = tenantOn(b.id, '2026-09-01', 40000, 'Leaver');
+		splitUtilityBill(db, owner, {
+			propertyId: p.id,
+			label: 'TNB',
+			amountSen: 31001,
+			fromDate: '2026-10-01',
+			toDate: '2026-10-31',
+			dueDate: '2026-11-07'
+		});
+		const shares = () =>
+			Object.fromEntries(
+				db
+					.select()
+					.from(charge)
+					.where(eq(charge.kind, 'utility'))
+					.all()
+					.map((c) => [c.tenancyId, [c.amountSen, c.description] as [number, string]])
+			);
+		expect(shares()[t2.id][0]).toBe(15500);
+
+		// Leaver's last night is 10 Oct: 10 of 41 tenant-nights.
+		const result = moveOut(db, owner, t2.id, '2026-10-11');
+		expect(result.utility).toEqual([
+			expect.objectContaining({ label: 'TNB', beforeSen: 15500, afterSen: 7561 })
+		]);
+		const after = shares();
+		expect(after[t2.id]).toEqual([7561, 'TNB 2026-10-01 to 2026-10-31 (10 nights)']);
+		expect(after[t1.id]).toEqual([23440, 'TNB 2026-10-01 to 2026-10-31 (31 nights)']);
+		expect(after[t1.id][0] + after[t2.id][0]).toBe(31001);
+	});
+
+	it('removes the share of a tenant who left before the bill period, and keeps earlier bills', () => {
+		const { p, a, b } = house();
+		const t1 = tenantOn(a.id, '2026-09-01', 40000, 'Stayer');
+		const t2 = tenantOn(b.id, '2026-09-01', 40000, 'Leaver');
+		const bill = (label: string, fromDate: string, toDate: string) =>
+			splitUtilityBill(db, owner, {
+				propertyId: p.id,
+				label,
+				amountSen: 10000,
+				fromDate,
+				toDate,
+				dueDate: '2026-11-07'
+			});
+		bill('Water Sep', '2026-09-01', '2026-09-30');
+		bill('Water Oct', '2026-10-01', '2026-10-31');
+		const result = moveOut(db, owner, t2.id, '2026-10-01');
+		expect(result.utility.map((u) => [u.label, u.beforeSen, u.afterSen])).toEqual([
+			['Water Oct', 5000, 0]
+		]);
+		const rows = db.select().from(charge).where(eq(charge.kind, 'utility')).all();
+		const sum = (tenancyId: number) =>
+			rows.filter((c) => c.tenancyId === tenancyId).reduce((s, c) => s + c.amountSen, 0);
+		expect(sum(t2.id)).toBe(5000); // September share untouched
+		expect(sum(t1.id)).toBe(5000 + 10000);
+	});
+
+	it('leaves a bill alone when nobody else shared it', () => {
+		const { p, a } = house();
+		const t = tenantOn(a.id, '2026-09-01');
+		splitUtilityBill(db, owner, {
+			propertyId: p.id,
+			label: 'Internet',
+			amountSen: 12900,
+			fromDate: '2026-10-01',
+			toDate: '2026-10-31',
+			dueDate: '2026-11-07'
+		});
+		expect(moveOut(db, owner, t.id, '2026-10-01').utility).toEqual([]);
+		const rows = db.select().from(charge).where(eq(charge.kind, 'utility')).all();
+		expect(rows.map((c) => c.amountSen)).toEqual([12900]);
+	});
+
+	it('does not pull tenants who were not in the original split into a re-split', () => {
+		const { p, r, a, b } = house();
+		const t1 = tenantOn(a.id, '2026-09-01', 40000, 'Stayer');
+		const t2 = tenantOn(b.id, '2026-09-01', 40000, 'Leaver');
+		splitUtilityBill(db, owner, {
+			propertyId: p.id,
+			label: 'TNB',
+			amountSen: 10000,
+			fromDate: '2026-10-01',
+			toDate: '2026-10-31',
+			dueDate: '2026-11-07'
+		});
+		// A move-in recorded later for the same period is not billed out of the blue.
+		const c = addBed(db, owner, r.id, { label: 'C', defaultRentSen: 40000 });
+		const late = tenantOn(c.id, '2026-10-05', 40000, 'Late Entry');
+		moveOut(db, owner, t2.id, '2026-10-16');
+		const rows = db.select().from(charge).where(eq(charge.kind, 'utility')).all();
+		expect(rows.map((x) => x.tenancyId).sort()).toEqual([t1.id, t2.id].sort());
+		expect(rows.some((x) => x.tenancyId === late.id)).toBe(false);
+		expect(rows.reduce((s, x) => s + x.amountSen, 0)).toBe(10000);
+	});
+
 	it('rejects empty houses and bad periods', () => {
 		const { p } = house();
 		const base = {

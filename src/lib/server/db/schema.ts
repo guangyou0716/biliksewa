@@ -1,12 +1,25 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+	type AnySQLiteColumn,
+	index,
+	integer,
+	sqliteTable,
+	text,
+	uniqueIndex
+} from 'drizzle-orm/sqlite-core';
 
-/** Landlord accounts. Tenants get their own portal in a later increment. */
+/**
+ * Sign-in accounts. Landlords own properties; a tenant account is linked to exactly one tenant
+ * record (see `tenant.userId`) and can only see that tenant's own ledger.
+ */
 export const user = sqliteTable('user', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	email: text('email').notNull().unique(),
 	name: text('name').notNull(),
-	passwordHash: text('password_hash').notNull()
+	passwordHash: text('password_hash').notNull(),
+	role: text('role', { enum: ['landlord', 'tenant'] })
+		.notNull()
+		.default('landlord')
 });
 
 /** Only the SHA-256 of the session token is stored, so a leaked database cannot be replayed as cookies. */
@@ -67,10 +80,25 @@ export const tenant = sqliteTable(
 			.notNull()
 			.references(() => user.id, { onDelete: 'cascade' }),
 		name: text('name').notNull(),
-		email: text('email')
+		email: text('email'),
+		/** The tenant's own portal account, once they accepted an invite. */
+		userId: integer('user_id').references(() => user.id, { onDelete: 'set null' })
 	},
-	(t) => [index('tenant_owner_idx').on(t.ownerId)]
+	(t) => [index('tenant_owner_idx').on(t.ownerId), uniqueIndex('tenant_user_uq').on(t.userId)]
 );
+
+/**
+ * A one-time link a landlord shares with a tenant to create their portal account.
+ * Like sessions, only the SHA-256 of the token is stored. One open invite per tenant.
+ */
+export const tenantInvite = sqliteTable('tenant_invite', {
+	id: text('id').primaryKey(),
+	tenantId: integer('tenant_id')
+		.notNull()
+		.unique()
+		.references(() => tenant.id, { onDelete: 'cascade' }),
+	expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull()
+});
 
 /**
  * A tenant occupying one bed. Dates are ISO `YYYY-MM-DD`. `endDate` is the move-out day:
@@ -109,7 +137,11 @@ export const charge = sqliteTable(
 		amountSen: integer('amount_sen').notNull(),
 		dueDate: text('due_date').notNull(),
 		/** Groups the shares of one split house bill. */
-		utilityBillId: integer('utility_bill_id').references(() => utilityBill.id)
+		utilityBillId: integer('utility_bill_id').references(() => utilityBill.id),
+		/** Set on deductions (cleaning, repairs...) taken from the deposit at move-out. */
+		depositSettlementId: integer('deposit_settlement_id').references(
+			(): AnySQLiteColumn => depositSettlement.id
+		)
 	},
 	(t) => [
 		index('charge_tenancy_idx').on(t.tenancyId),
@@ -140,8 +172,31 @@ export const payment = sqliteTable(
 			.references(() => tenancy.id),
 		amountSen: integer('amount_sen').notNull(),
 		paidOn: text('paid_on').notNull(),
-		method: text('method', { enum: ['cash', 'bank_transfer', 'other'] }).notNull(),
+		/** `deposit` = paid out of the tenant's deposit when it was settled at move-out (no new cash). */
+		method: text('method', { enum: ['cash', 'bank_transfer', 'other', 'deposit'] }).notNull(),
 		reference: text('reference')
 	},
 	(t) => [index('payment_tenancy_idx').on(t.tenancyId)]
 );
+
+/**
+ * The deposit settled once a tenant has moved out: it pays the deductions first, then any other unpaid
+ * charges (recorded as one `deposit` payment), and the rest is refunded to the tenant.
+ * Invariant: depositSen = appliedSen + refundSen.
+ */
+export const depositSettlement = sqliteTable('deposit_settlement', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	tenancyId: integer('tenancy_id')
+		.notNull()
+		.unique()
+		.references(() => tenancy.id),
+	settledOn: text('settled_on').notNull(),
+	depositSen: integer('deposit_sen').notNull(),
+	deductionsSen: integer('deductions_sen').notNull(),
+	/** Part of the deposit used to pay the tenant's unpaid charges (including the deductions). */
+	appliedSen: integer('applied_sen').notNull(),
+	refundSen: integer('refund_sen').notNull(),
+	refundMethod: text('refund_method', { enum: ['cash', 'bank_transfer', 'other'] }),
+	refundReference: text('refund_reference'),
+	paymentId: integer('payment_id').references(() => payment.id)
+});

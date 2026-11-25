@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { allocatePayments, overdueSen, proratedRent, splitByNights } from '../billing';
 import { addDays, monthOf, monthRange, overlapNights, staysOverlap } from '../dates';
 import type { DB } from './db/client';
@@ -42,7 +42,7 @@ function ownedBed(db: DB, ownerId: number, bedId: number) {
 	return row;
 }
 
-function ownedTenancy(db: DB, ownerId: number, tenancyId: number) {
+export function ownedTenancy(db: DB, ownerId: number, tenancyId: number) {
 	const row = db
 		.select({ tenancy, tenant, bed, room, property })
 		.from(tenancy)
@@ -227,13 +227,28 @@ export function moveIn(
 	});
 }
 
+export interface UtilityAdjustment {
+	billId: number;
+	label: string;
+	fromDate: string;
+	toDate: string;
+	/** The moving-out tenant's share before and after (0 = share removed). */
+	beforeSen: number;
+	afterSen: number;
+}
+
+/**
+ * Records the move-out day. Charges already billed for nights after it are corrected:
+ * rent for the move-out month or later is re-pro-rated, and every split house bill whose period
+ * runs past the move-out is split again over the same tenants by the nights they actually
+ * stayed, so the bill still adds up exactly (housemates' shares go up accordingly).
+ */
 export function moveOut(db: DB, ownerId: number, tenancyId: number, endDate: string) {
 	const { tenancy: t } = ownedTenancy(db, ownerId, tenancyId);
 	if (t.endDate) throw new RentalError('Tenant has already moved out');
 	if (endDate <= t.startDate) throw new RentalError('Move-out must be after the move-in date');
-	db.transaction((tx) => {
+	return db.transaction((tx) => {
 		tx.update(tenancy).set({ endDate }).where(eq(tenancy.id, tenancyId)).run();
-		// Rent already billed for the move-out month or later is re-pro-rated to the nights actually stayed.
 		const rents = tx
 			.select()
 			.from(charge)
@@ -245,12 +260,71 @@ export function moveOut(db: DB, ownerId: number, tenancyId: number, endDate: str
 				)
 			)
 			.all();
+		let rentAdjusted = 0;
 		for (const c of rents) {
 			const amountSen = proratedRent(t.monthlyRentSen, c.period, t.startDate, endDate);
+			if (amountSen === c.amountSen) continue;
+			rentAdjusted += 1;
 			if (amountSen === 0) tx.delete(charge).where(eq(charge.id, c.id)).run();
-			else if (amountSen !== c.amountSen)
-				tx.update(charge).set({ amountSen }).where(eq(charge.id, c.id)).run();
+			else tx.update(charge).set({ amountSen }).where(eq(charge.id, c.id)).run();
 		}
+
+		// The last night stayed is endDate - 1, so a bill covering the night of endDate or later changes.
+		const bills = tx
+			.select({ bill: utilityBill })
+			.from(charge)
+			.innerJoin(utilityBill, eq(charge.utilityBillId, utilityBill.id))
+			.where(and(eq(charge.tenancyId, tenancyId), gte(utilityBill.toDate, endDate)))
+			.all()
+			.map((r) => r.bill);
+		const utility: UtilityAdjustment[] = [];
+		for (const bill of bills) {
+			const toExclusive = addDays(bill.toDate, 1);
+			const shares = tx
+				.select({ charge, tenancy })
+				.from(charge)
+				.innerJoin(tenancy, eq(charge.tenancyId, tenancy.id))
+				.where(eq(charge.utilityBillId, bill.id))
+				.all();
+			const stays = shares.map((s) => ({
+				id: s.charge.id,
+				nights: overlapNights(s.tenancy.startDate, s.tenancy.endDate, bill.fromDate, toExclusive)
+			}));
+			// Only the tenants already sharing the bill take part, so nobody is billed out of the blue.
+			// If nobody else shared it, the mover keeps the whole bill (a house cannot bill zero nights).
+			if (stays.every((s) => s.nights === 0)) continue;
+			const after = new Map(splitByNights(bill.amountSen, stays).map((s) => [s.id, s]));
+			let beforeSen = 0;
+			let afterSen = 0;
+			for (const s of shares) {
+				const share = after.get(s.charge.id);
+				if (s.tenancy.id === tenancyId) {
+					beforeSen = s.charge.amountSen;
+					afterSen = share?.amountSen ?? 0;
+				}
+				if (!share) {
+					tx.delete(charge).where(eq(charge.id, s.charge.id)).run();
+				} else {
+					tx.update(charge)
+						.set({
+							amountSen: share.amountSen,
+							description: `${bill.label} ${bill.fromDate} to ${bill.toDate} (${share.nights} nights)`
+						})
+						.where(eq(charge.id, s.charge.id))
+						.run();
+				}
+			}
+			if (beforeSen !== afterSen)
+				utility.push({
+					billId: bill.id,
+					label: bill.label,
+					fromDate: bill.fromDate,
+					toDate: bill.toDate,
+					beforeSen,
+					afterSen
+				});
+		}
+		return { rentAdjusted, utility };
 	});
 }
 
@@ -306,7 +380,14 @@ function balances(db: DB, tenancyId: number, today: string) {
 }
 
 export function tenancyLedger(db: DB, ownerId: number, tenancyId: number, today: string) {
-	const info = ownedTenancy(db, ownerId, tenancyId);
+	return { ...ownedTenancy(db, ownerId, tenancyId), ...ledgerEntries(db, tenancyId, today) };
+}
+
+/**
+ * Charges (with what is still unpaid on each), payments and totals of one tenancy.
+ * Does no access check: callers must first prove the tenancy belongs to the signed-in user.
+ */
+export function ledgerEntries(db: DB, tenancyId: number, today: string) {
 	const charges = db
 		.select()
 		.from(charge)
@@ -322,7 +403,6 @@ export function tenancyLedger(db: DB, ownerId: number, tenancyId: number, today:
 	const totals = balances(db, tenancyId, today);
 	const unpaid = new Map(allocatePayments(charges, totals.paidSen).map((c) => [c.id, c.unpaidSen]));
 	return {
-		...info,
 		charges: charges.map((c) => ({ ...c, unpaidSen: unpaid.get(c.id) ?? 0 })),
 		payments,
 		...totals
@@ -526,6 +606,8 @@ export function dashboard(db: DB, ownerId: number, today: string) {
 				.where(
 					and(
 						inArray(payment.tenancyId, ids),
+						// Money taken from a deposit at move-out is not new cash collected.
+						ne(payment.method, 'deposit'),
 						sql`${payment.paidOn} >= ${start}`,
 						sql`${payment.paidOn} < ${endExclusive}`
 					)

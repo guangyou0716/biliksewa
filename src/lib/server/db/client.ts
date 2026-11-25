@@ -1,9 +1,10 @@
 import Database from 'better-sqlite3';
-import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import * as schema from './schema';
+import type { DB } from './types';
 
-export type DB = BetterSQLite3Database<typeof schema>;
+export type { DB } from './types';
 
 /** Opens (or creates) a SQLite database and applies the committed migrations in ./drizzle. */
 export function createDb(path: string): DB {

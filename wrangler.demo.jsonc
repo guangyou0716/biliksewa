@@ -1,0 +1,19 @@
+// Public demo on Cloudflare's free plan. Build with `npm run demo:build`, deploy with `npm run demo:deploy`.
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "biliksewa-demo",
+	"main": "worker/demo.ts",
+	"compatibility_date": "2026-11-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": true,
+	"preview_urls": false,
+	"alias": { "sveltekit-worker": "./.svelte-kit/cloudflare/worker/index.js" },
+	"rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
+	"assets": { "directory": ".svelte-kit/cloudflare/client", "binding": "ASSETS" },
+	"durable_objects": { "bindings": [{ "name": "DEMO", "class_name": "DemoApp" }] },
+	// Free plan: Durable Objects must use SQLite storage.
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["DemoApp"] }],
+	// Not a secret: the demo keeps its data in the Durable Object, this only satisfies src/env.ts.
+	"vars": { "DATABASE_URL": "durable-object" },
+	"observability": { "enabled": false }
+}
