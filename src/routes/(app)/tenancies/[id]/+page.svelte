@@ -1,17 +1,25 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import FormMessage from '#lib/components/FormMessage.svelte';
+	import Ledger from '#lib/components/Ledger.svelte';
 	import Stat from '#lib/components/Stat.svelte';
 	import { formatRM } from '#lib/money.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 	const l = $derived(data.ledger);
-	const methodLabel: Record<string, string> = {
-		cash: 'Cash',
-		bank_transfer: 'Bank transfer',
-		other: 'Other'
-	};
+	const inviteUrl = $derived(form && 'inviteUrl' in form ? form.inviteUrl : null);
+	let copied = $state(false);
+	let linkInput: HTMLInputElement | undefined = $state();
+	async function copy(text: string) {
+		try {
+			await navigator.clipboard.writeText(text);
+			copied = true;
+		} catch {
+			// No clipboard access (e.g. plain http): select the link so it can be copied by hand.
+			linkInput?.select();
+		}
+	}
 </script>
 
 <svelte:head><title>{l.tenant.name} · biliksewa</title></svelte:head>
@@ -50,63 +58,7 @@
 
 <div class="mt-6 grid gap-6 lg:grid-cols-3">
 	<div class="space-y-6 lg:col-span-2">
-		<section class="card overflow-x-auto" aria-labelledby="charges-h">
-			<h2 id="charges-h" class="font-semibold">Charges</h2>
-			<table class="mt-3 table">
-				<thead>
-					<tr>
-						<th>Due</th><th>Description</th><th class="text-right">Amount</th><th
-							class="text-right"
-						>
-							Unpaid
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each l.charges as c (c.id)}
-						<tr>
-							<td class="whitespace-nowrap text-slate-500">{c.dueDate}</td>
-							<td>{c.description}</td>
-							<td class="text-right tabular-nums">{formatRM(c.amountSen)}</td>
-							<td class="text-right tabular-nums">
-								{#if c.unpaidSen === 0}
-									<span class="badge bg-brand-100 text-brand-700">Paid</span>
-								{:else}
-									<span class={c.dueDate < data.today ? 'font-medium text-amber-700' : ''}>
-										{formatRM(c.unpaidSen)}
-									</span>
-								{/if}
-							</td>
-						</tr>
-					{:else}
-						<tr><td colspan="4" class="text-slate-500">No charges yet.</td></tr>
-					{/each}
-				</tbody>
-			</table>
-		</section>
-
-		<section class="card overflow-x-auto" aria-labelledby="payments-h">
-			<h2 id="payments-h" class="font-semibold">Payments</h2>
-			<table class="mt-3 table">
-				<thead>
-					<tr>
-						<th>Paid on</th><th>Method</th><th>Reference</th><th class="text-right">Amount</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each l.payments as p (p.id)}
-						<tr>
-							<td class="text-slate-500">{p.paidOn}</td>
-							<td>{methodLabel[p.method]}</td>
-							<td class="text-slate-500">{p.reference ?? '—'}</td>
-							<td class="text-right tabular-nums">{formatRM(p.amountSen)}</td>
-						</tr>
-					{:else}
-						<tr><td colspan="4" class="text-slate-500">No payments yet.</td></tr>
-					{/each}
-				</tbody>
-			</table>
-		</section>
+		<Ledger charges={l.charges} payments={l.payments} today={data.today} />
 	</div>
 
 	<div class="space-y-6">
@@ -130,6 +82,72 @@
 			<button class="btn w-full">Record payment</button>
 			<p class="text-xs text-slate-500">Recorded manually. No payment gateway is involved.</p>
 		</form>
+
+		<section class="card space-y-3" aria-labelledby="portal-h">
+			<h2 id="portal-h" class="font-semibold">Tenant portal</h2>
+			{#if data.portal.account}
+				<p class="text-sm text-slate-600">
+					Active. {l.tenant.name} signs in as <strong>{data.portal.account.email}</strong> and sees only
+					this ledger.
+				</p>
+				<form
+					method="POST"
+					action="?/revokePortal"
+					use:enhance={({ cancel }) => {
+						if (!confirm(`Remove portal access for ${l.tenant.name}?`)) cancel();
+					}}
+				>
+					<button class="btn-secondary w-full">Remove portal access</button>
+				</form>
+			{:else}
+				<p class="text-sm text-slate-600">
+					Send {l.tenant.name} a one-time link so they can check their own rent, bills and receipts.
+				</p>
+				{#if inviteUrl}
+					<label class="label">
+						Invite link (shown once, valid 7 days)
+						<input
+							bind:this={linkInput}
+							class="field font-mono text-xs"
+							readonly
+							value={inviteUrl}
+						/>
+					</label>
+					<div class="flex gap-2">
+						<button type="button" class="btn-secondary flex-1" onclick={() => copy(inviteUrl)}>
+							{copied ? 'Copied' : 'Copy link'}
+						</button>
+						<a
+							class="btn-secondary flex-1"
+							target="_blank"
+							rel="noopener noreferrer"
+							href="https://wa.me/?text={encodeURIComponent(
+								`Hi ${l.tenant.name}, check your rent and payments for ${l.property.name} here: ${inviteUrl}`
+							)}"
+						>
+							WhatsApp
+						</a>
+					</div>
+				{:else if data.portal.inviteExpiresOn}
+					<p class="text-xs text-slate-500">
+						An invite link is open until {data.portal.inviteExpiresOn}. Creating a new one cancels
+						it.
+					</p>
+				{/if}
+				<form
+					method="POST"
+					action="?/invite"
+					use:enhance={() => {
+						copied = false;
+						return ({ update }) => update({ reset: false });
+					}}
+				>
+					<button class="btn w-full">
+						{inviteUrl ? 'Create a new link' : 'Create invite link'}
+					</button>
+				</form>
+			{/if}
+		</section>
 
 		{#if !l.tenancy.endDate}
 			<form method="POST" action="?/moveOut" use:enhance class="card space-y-3">

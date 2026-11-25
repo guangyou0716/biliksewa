@@ -4,22 +4,32 @@ import { SESSION_COOKIE, validateSession } from '#lib/server/auth.ts';
 import { db } from '#lib/server/db/index.ts';
 import { todayInMalaysia } from '#lib/server/today.ts';
 
-const PUBLIC_PATHS = new Set(['/login']);
+const under = (path: string, prefix: string) => path === prefix || path.startsWith(prefix + '/');
+
+/** Pages anyone can open without signing in. */
+const isPublic = (path: string) => path === '/login' || path.startsWith('/invite/');
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const token = event.cookies.get(SESSION_COOKIE);
-	event.locals.user = token ? validateSession(db, token) : null;
+	const user = token ? validateSession(db, token) : null;
+	event.locals.user = user;
 	event.locals.today = todayInMalaysia();
-	if (token && !event.locals.user) event.cookies.delete(SESSION_COOKIE, { path: '/' });
+	if (token && !user) event.cookies.delete(SESSION_COOKIE, { path: '/' });
 
-	if (!event.locals.user && !PUBLIC_PATHS.has(event.url.pathname)) {
-		const next = event.url.pathname + event.url.search;
-		redirect(303, `/login?next=${encodeURIComponent(next)}`);
+	const path = event.url.pathname;
+	if (!user && !isPublic(path)) {
+		redirect(303, `/login?next=${encodeURIComponent(path + event.url.search)}`);
 	}
+	// Tenants only ever see their own portal; landlords never see it.
+	if (user?.role === 'tenant' && !under(path, '/portal') && path !== '/logout' && !isPublic(path))
+		redirect(303, '/portal');
+	if (user?.role === 'landlord' && under(path, '/portal')) redirect(303, '/');
 
 	const response = await resolve(event);
 	response.headers.set('X-Frame-Options', 'DENY');
 	response.headers.set('X-Content-Type-Options', 'nosniff');
-	response.headers.set('Referrer-Policy', 'same-origin');
+	// Pages may ask for a stricter policy (the invite page uses no-referrer).
+	if (!response.headers.has('Referrer-Policy'))
+		response.headers.set('Referrer-Policy', 'same-origin');
 	return response;
 };

@@ -42,7 +42,7 @@ function ownedBed(db: DB, ownerId: number, bedId: number) {
 	return row;
 }
 
-function ownedTenancy(db: DB, ownerId: number, tenancyId: number) {
+export function ownedTenancy(db: DB, ownerId: number, tenancyId: number) {
 	const row = db
 		.select({ tenancy, tenant, bed, room, property })
 		.from(tenancy)
@@ -306,7 +306,14 @@ function balances(db: DB, tenancyId: number, today: string) {
 }
 
 export function tenancyLedger(db: DB, ownerId: number, tenancyId: number, today: string) {
-	const info = ownedTenancy(db, ownerId, tenancyId);
+	return { ...ownedTenancy(db, ownerId, tenancyId), ...ledgerEntries(db, tenancyId, today) };
+}
+
+/**
+ * Charges (with what is still unpaid on each), payments and totals of one tenancy.
+ * Does no access check: callers must first prove the tenancy belongs to the signed-in user.
+ */
+export function ledgerEntries(db: DB, tenancyId: number, today: string) {
 	const charges = db
 		.select()
 		.from(charge)
@@ -322,7 +329,6 @@ export function tenancyLedger(db: DB, ownerId: number, tenancyId: number, today:
 	const totals = balances(db, tenancyId, today);
 	const unpaid = new Map(allocatePayments(charges, totals.paidSen).map((c) => [c.id, c.unpaidSen]));
 	return {
-		...info,
 		charges: charges.map((c) => ({ ...c, unpaidSen: unpaid.get(c.id) ?? 0 })),
 		payments,
 		...totals

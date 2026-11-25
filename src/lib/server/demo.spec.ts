@@ -6,9 +6,12 @@ import { describe, expect, it } from 'vitest';
 import { authenticate } from './auth';
 import * as schema from './db/schema';
 import { DEMO_RESET_MS, demoNeedsReset, installDemo, migrationStatements } from './demo';
-import { DEMO_EMAIL, DEMO_PASSWORD } from './seed';
+import { DEMO_EMAIL, DEMO_PASSWORD, DEMO_TENANT_EMAIL, DEMO_TENANT_PASSWORD } from './seed';
 
-const migrationSql = readFileSync('drizzle/0000_init.sql', 'utf8');
+const journal = JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')) as {
+	entries: { tag: string }[];
+};
+const migrations = journal.entries.map((e) => readFileSync(`drizzle/${e.tag}.sql`, 'utf8'));
 
 describe('migrationStatements', () => {
 	it('splits on drizzle-kit breakpoints and drops blanks', () => {
@@ -25,10 +28,17 @@ describe('installDemo', () => {
 		const client = new Database(':memory:');
 		client.pragma('foreign_keys = ON');
 		const db = drizzle(client, { schema });
-		await installDemo(db, migrationSql, '2026-11-25');
-		expect(db.select({ n: count() }).from(schema.user).get()?.n).toBe(1);
+		await installDemo(db, migrations, '2026-11-25');
+		expect(db.select({ n: count() }).from(schema.user).get()?.n).toBe(2);
 		expect(db.select({ n: count() }).from(schema.property).get()?.n).toBe(2);
-		expect(await authenticate(db, DEMO_EMAIL, DEMO_PASSWORD)).not.toBeNull();
+		expect((await authenticate(db, DEMO_EMAIL, DEMO_PASSWORD))?.role).toBe('landlord');
+		expect((await authenticate(db, DEMO_TENANT_EMAIL, DEMO_TENANT_PASSWORD))?.role).toBe('tenant');
+	});
+
+	it('the Worker imports every migration in the journal, in order', () => {
+		const worker = readFileSync('worker/demo.ts', 'utf8');
+		const imported = [...worker.matchAll(/from '\.\.\/drizzle\/([\w-]+)\.sql'/g)].map((m) => m[1]);
+		expect(imported).toEqual(journal.entries.map((e) => e.tag));
 	});
 });
 

@@ -13,9 +13,13 @@ export function migrationStatements(migrationSql: string): string[] {
 		.filter(Boolean);
 }
 
-/** Creates the schema in an empty database and fills it with the synthetic demo data. */
-export async function installDemo(db: DB, migrationSql: string, today: string) {
-	for (const statement of migrationStatements(migrationSql)) db.run(sql.raw(statement));
+/**
+ * Creates the schema in an empty database and fills it with the synthetic demo data.
+ * `migrations` are the drizzle-kit migration files in journal order.
+ */
+export async function installDemo(db: DB, migrations: readonly string[], today: string) {
+	for (const file of migrations)
+		for (const statement of migrationStatements(file)) db.run(sql.raw(statement));
 	return seedDemo(db, today);
 }
 

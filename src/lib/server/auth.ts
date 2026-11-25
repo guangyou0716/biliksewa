@@ -24,7 +24,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
 	return timingSafeEqual(actual, expected);
 }
 
-function hashToken(token: string): string {
+export function hashToken(token: string): string {
 	return createHash('sha256').update(token).digest('hex');
 }
 
@@ -32,7 +32,14 @@ export interface SessionUser {
 	id: number;
 	name: string;
 	email: string;
+	role: 'landlord' | 'tenant';
 }
+
+function sessionUser(row: typeof user.$inferSelect): SessionUser {
+	return { id: row.id, name: row.name, email: row.email, role: row.role };
+}
+
+export const MIN_PASSWORD_LENGTH = 8;
 
 /** Checks credentials. Always runs scrypt so response time does not reveal whether the email exists. */
 export async function authenticate(
@@ -45,7 +52,7 @@ export async function authenticate(
 		password,
 		row?.passwordHash ?? 'scrypt$AAAAAAAAAAAAAAAAAAAAAA==$' + 'A'.repeat(86) + '=='
 	);
-	return row && ok ? { id: row.id, name: row.name, email: row.email } : null;
+	return row && ok ? sessionUser(row) : null;
 }
 
 export function createSession(db: DB, userId: number, now = Date.now()) {
@@ -71,7 +78,7 @@ export function validateSession(db: DB, token: string, now = Date.now()): Sessio
 		db.delete(session).where(eq(session.id, id)).run();
 		return null;
 	}
-	return { id: row.u.id, name: row.u.name, email: row.u.email };
+	return sessionUser(row.u);
 }
 
 export function deleteSession(db: DB, token: string) {
