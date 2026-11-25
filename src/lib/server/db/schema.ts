@@ -1,12 +1,18 @@
 import { sql } from 'drizzle-orm';
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
-/** Landlord accounts. Tenants get their own portal in a later increment. */
+/**
+ * Sign-in accounts. Landlords own properties; a tenant account is linked to exactly one tenant
+ * record (see `tenant.userId`) and can only see that tenant's own ledger.
+ */
 export const user = sqliteTable('user', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	email: text('email').notNull().unique(),
 	name: text('name').notNull(),
-	passwordHash: text('password_hash').notNull()
+	passwordHash: text('password_hash').notNull(),
+	role: text('role', { enum: ['landlord', 'tenant'] })
+		.notNull()
+		.default('landlord')
 });
 
 /** Only the SHA-256 of the session token is stored, so a leaked database cannot be replayed as cookies. */
@@ -67,10 +73,25 @@ export const tenant = sqliteTable(
 			.notNull()
 			.references(() => user.id, { onDelete: 'cascade' }),
 		name: text('name').notNull(),
-		email: text('email')
+		email: text('email'),
+		/** The tenant's own portal account, once they accepted an invite. */
+		userId: integer('user_id').references(() => user.id, { onDelete: 'set null' })
 	},
-	(t) => [index('tenant_owner_idx').on(t.ownerId)]
+	(t) => [index('tenant_owner_idx').on(t.ownerId), uniqueIndex('tenant_user_uq').on(t.userId)]
 );
+
+/**
+ * A one-time link a landlord shares with a tenant to create their portal account.
+ * Like sessions, only the SHA-256 of the token is stored. One open invite per tenant.
+ */
+export const tenantInvite = sqliteTable('tenant_invite', {
+	id: text('id').primaryKey(),
+	tenantId: integer('tenant_id')
+		.notNull()
+		.unique()
+		.references(() => tenant.id, { onDelete: 'cascade' }),
+	expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull()
+});
 
 /**
  * A tenant occupying one bed. Dates are ISO `YYYY-MM-DD`. `endDate` is the move-out day:

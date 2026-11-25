@@ -6,8 +6,8 @@ Room and bed rental management web system for Malaysian landlords ("bilik sewa" 
 It tracks who sleeps in which bed, bills monthly rent pro-rated by nights, splits house bills by nights
 stayed, and keeps a ledger per tenant.
 
-**Live demo:** <https://biliksewa-demo.guangyou.workers.dev>. Sign in with the demo account
-`demo@biliksewa.test` / `demo-landlord`. All people, houses and payments in it are made up. Anyone can
+**Live demo:** <https://biliksewa-demo.guangyou.workers.dev>. Sign in as the demo landlord
+`demo@biliksewa.test` / `demo-landlord`, or as the demo tenant `tenant@biliksewa.test` / `demo-tenant`. All people, houses and payments in it are made up. Anyone can
 change the demo data, and it goes back to the sample data every hour.
 
 ![Dashboard](docs/dashboard.png)
@@ -24,11 +24,18 @@ change the demo data, and it goes back to the sample data every hour.
 - **Tenant ledger**: charges, payments (recorded by hand, no payment gateway), balance and overdue amount.
   Payments are applied to the oldest charge first.
 - **Dashboard**: occupancy, billed and collected this month, outstanding, and the overdue list.
-- **Landlord sign-in**: scrypt password hashes, server-side sessions that store only the SHA-256 of the token,
-  14-day expiry, `Secure` cookies on HTTPS. Every query is scoped to the signed-in landlord.
+- **Tenant portal**: the landlord creates a one-time invite link (valid 7 days, copy or share on WhatsApp).
+  The tenant picks a password and then sees only their own stay, charges, payments and printable payment
+  receipts. Landlord pages are closed to tenant accounts, and another tenant's receipt is a 404, the same as
+  a receipt that doesn't exist. The landlord can remove access at any time, which signs the tenant out.
+- **Sign-in security**: scrypt password hashes, server-side sessions that store only the SHA-256 of the token,
+  14-day expiry, `Secure` cookies on HTTPS. Invite tokens are stored hashed too. Failed sign-ins are rate
+  limited (5 per email from one address and 20 per address every 15 minutes; in memory, per process).
+  Every landlord query is scoped to the signed-in landlord.
 
 ![Property board](docs/property-board.png)
 ![Bill split](docs/bill-split.png)
+![Tenant portal](docs/tenant-portal.png)
 
 ## Stack
 
@@ -46,7 +53,7 @@ npm run db:seed         # resets local.db with the synthetic demo data
 npm run dev
 ```
 
-Open <http://localhost:5173> and sign in with the demo account above.
+Open <http://localhost:5173> and sign in with one of the demo accounts above.
 
 | Command                           | What it does                                          |
 | --------------------------------- | ----------------------------------------------------- |
@@ -61,7 +68,7 @@ The demo runs on Cloudflare Workers' free plan. `npm run demo:build` builds the 
 `@sveltejs/adapter-cloudflare`, and [`worker/demo.ts`](worker/demo.ts) sends every request to one Durable
 Object. That object keeps the data in its built-in SQLite storage. Its queries run synchronously like
 better-sqlite3, so the app code is the same as on Node. The object seeds the synthetic data on first use and
-wipes visitors' changes every hour. `npm run demo:dev` runs it locally; `npm run demo:deploy` deploys it with
+wipes visitors' changes every hour, or straight away when a deploy adds a database migration. `npm run demo:dev` runs it locally; `npm run demo:deploy` deploys it with
 the settings in [`wrangler.demo.jsonc`](wrangler.demo.jsonc).
 
 ## License

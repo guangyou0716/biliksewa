@@ -27,5 +27,18 @@ await page.getByRole('button', { name: 'Preview split' }).click();
 await page.getByRole('region', { name: /Preview/ }).waitFor();
 await page.screenshot({ path: 'docs/bill-split.png', fullPage: true });
 
+const tenant = await browser.newPage({
+	viewport: { width: 1280, height: 860 },
+	deviceScaleFactor: 1
+});
+await tenant.goto(`${base}/login`);
+await tenant.getByLabel('Email').fill('tenant@biliksewa.test');
+await tenant.getByLabel('Password').fill('demo-tenant');
+await tenant.getByRole('button', { name: 'Sign in' }).click();
+await tenant.waitForURL(`${base}/portal`);
+await tenant.screenshot({ path: 'docs/tenant-portal.png', fullPage: true });
+
 await browser.close();
-console.log('Saved docs/dashboard.png, docs/property-board.png, docs/bill-split.png');
+console.log(
+	'Saved docs/dashboard.png, docs/property-board.png, docs/bill-split.png, docs/tenant-portal.png'
+);

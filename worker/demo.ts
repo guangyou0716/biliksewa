@@ -8,7 +8,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import { drizzle } from 'drizzle-orm/durable-sqlite';
 import sveltekit from 'sveltekit-worker';
-import migrationSql from '../drizzle/0000_init.sql';
+import init from '../drizzle/0000_init.sql';
+import tenantPortal from '../drizzle/0001_tenant_portal.sql';
 import * as schema from '../src/lib/server/db/schema';
 import { demoNeedsReset, installDemo } from '../src/lib/server/demo';
 import { todayInMalaysia } from '../src/lib/server/today';
@@ -19,6 +20,9 @@ interface Env {
 }
 
 const SEEDED_AT = 'seededAt';
+const MIGRATION_COUNT = 'migrationCount';
+/** Every file in drizzle/, in journal order (demo.spec.ts checks the list against the journal). */
+const MIGRATIONS = [init, tenantPortal];
 
 export class DemoApp extends DurableObject<Env> {
 	constructor(ctx: DurableObjectState, env: Env) {
@@ -27,19 +31,26 @@ export class DemoApp extends DurableObject<Env> {
 		void ctx.blockConcurrencyWhile(() => this.resetIfStale());
 	}
 
+	/** Stale data, or data seeded by an older deploy with fewer migrations. */
+	private async stale() {
+		const [seededAt, migrations] = await Promise.all([
+			this.ctx.storage.get<number>(SEEDED_AT),
+			this.ctx.storage.get<number>(MIGRATION_COUNT)
+		]);
+		return demoNeedsReset(seededAt, Date.now()) || migrations !== MIGRATIONS.length;
+	}
+
 	private async resetIfStale() {
-		const seededAt = await this.ctx.storage.get<number>(SEEDED_AT);
-		if (!demoNeedsReset(seededAt, Date.now())) return;
+		if (!(await this.stale())) return;
 		await this.ctx.storage.deleteAll();
 		const db = drizzle(this.ctx.storage, { schema });
 		globalThis.__biliksewaDb = db;
-		await installDemo(db, migrationSql, todayInMalaysia());
-		await this.ctx.storage.put(SEEDED_AT, Date.now());
+		await installDemo(db, MIGRATIONS, todayInMalaysia());
+		await this.ctx.storage.put({ [SEEDED_AT]: Date.now(), [MIGRATION_COUNT]: MIGRATIONS.length });
 	}
 
 	async fetch(request: Request): Promise<Response> {
-		const seededAt = await this.ctx.storage.get<number>(SEEDED_AT);
-		if (demoNeedsReset(seededAt, Date.now())) {
+		if (await this.stale()) {
 			await this.ctx.blockConcurrencyWhile(() => this.resetIfStale());
 		}
 		return sveltekit.fetch(request, this.env);

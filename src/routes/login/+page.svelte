@@ -14,7 +14,7 @@
 	<div class="card w-full max-w-sm">
 		<h1 class="text-xl font-semibold text-brand-900">biliksewa</h1>
 		<p class="mt-1 text-sm text-slate-500">
-			Room &amp; bed rental for landlords. Sign in to continue.
+			Room &amp; bed rental for landlords and their tenants. Sign in to continue.
 		</p>
 		<form method="POST" use:enhance class="mt-5 space-y-4">
 			<FormMessage error={form?.error} />
@@ -42,7 +42,9 @@
 			<button class="btn w-full">Sign in</button>
 		</form>
 		<p class="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
-			Demo account (synthetic data): <code>demo@biliksewa.test</code> / <code>demo-landlord</code>
+			Demo accounts (synthetic data):<br />
+			Landlord <code>demo@biliksewa.test</code> / <code>demo-landlord</code><br />
+			Tenant <code>tenant@biliksewa.test</code> / <code>demo-tenant</code>
 			{#if import.meta.env.VITE_PUBLIC_DEMO}
 				<br />This is a public demo. Anyone can change the data, and it goes back to the sample data
 				every hour.

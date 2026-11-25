@@ -1,7 +1,8 @@
 import { addDays, monthOf, monthRange } from '../dates';
 import { hashPassword } from './auth';
 import type { DB } from './db/client';
-import { user } from './db/schema';
+import { eq } from 'drizzle-orm';
+import { tenancy, tenant, user } from './db/schema';
 import {
 	addBed,
 	addProperty,
@@ -16,6 +17,10 @@ import {
 
 export const DEMO_EMAIL = 'demo@biliksewa.test';
 export const DEMO_PASSWORD = 'demo-landlord';
+export const DEMO_TENANT_EMAIL = 'tenant@biliksewa.test';
+export const DEMO_TENANT_PASSWORD = 'demo-tenant';
+/** The demo tenant account belongs to this (synthetic) tenant. */
+export const DEMO_TENANT_NAME = 'Priya Devi';
 
 function previousMonth(period: string, n = 1): string {
 	let [y, m] = period.split('-').map(Number);
@@ -156,5 +161,23 @@ export async function seedDemo(db: DB, today: string) {
 	pay('Aina Sofea', settle('Aina Sofea'), `${thisMonth}-01`, 'bank_transfer', 'DEMO-TRF-1007');
 	pay('Hafiz Danial', settle('Hafiz Danial'), `${thisMonth}-01`, 'cash');
 
-	return { ownerId: o, tenancies: t };
+	// Priya already accepted her invite, so visitors can sign in to the tenant portal.
+	const priya = db
+		.select({ tenantId: tenancy.tenantId })
+		.from(tenancy)
+		.where(eq(tenancy.id, t[DEMO_TENANT_NAME]))
+		.get()!;
+	const tenantUser = db
+		.insert(user)
+		.values({
+			email: DEMO_TENANT_EMAIL,
+			name: DEMO_TENANT_NAME,
+			passwordHash: await hashPassword(DEMO_TENANT_PASSWORD),
+			role: 'tenant'
+		})
+		.returning()
+		.get();
+	db.update(tenant).set({ userId: tenantUser.id }).where(eq(tenant.id, priya.tenantId)).run();
+
+	return { ownerId: o, tenantUserId: tenantUser.id, tenancies: t };
 }
