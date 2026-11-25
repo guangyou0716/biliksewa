@@ -4,7 +4,9 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+# --ignore-scripts: better-sqlite3 ships prebuilt binaries (glibc and musl), so its implicit
+# `node-gyp rebuild` is not needed (package.json allowScripts says the same for newer npm).
+RUN npm ci --no-audit --no-fund --ignore-scripts
 COPY . .
 # The build opens the database module once; point it at a throwaway file.
 RUN DATABASE_URL=/tmp/build.db npm run build \
