@@ -10,6 +10,20 @@ describe('csvCell formula injection guard', () => {
 		}
 	);
 
+	it.each([
+		' =1+1',
+		'  @SUM(A1)',
+		'\u00a0+60123',
+		'\u3000-cmd',
+		'＝1+1',
+		'＋60123',
+		'－cmd',
+		'＠SUM(A1)',
+		' ＝A1'
+	])('also guards %j (leading spaces or full-width formula characters)', (v) => {
+		expect(csvCell(v).replace(/^"/, '').startsWith("'")).toBe(true);
+	});
+
 	it('quotes and escapes cells with commas, quotes and line breaks', () => {
 		expect(csvCell('Rumah Mawar, Room 1')).toBe('"Rumah Mawar, Room 1"');
 		expect(csvCell('say "hi"')).toBe('"say ""hi"""');
@@ -21,6 +35,9 @@ describe('csvCell formula injection guard', () => {
 
 	it('leaves plain text, plain numbers and empty values alone', () => {
 		expect(csvCell('Aina Sofea')).toBe('Aina Sofea');
+		expect(csvCell('Bilik 1 = master')).toBe('Bilik 1 = master');
+		expect(csvCell(' Aina')).toBe(' Aina');
+		expect(csvCell('李-明')).toBe('李-明');
 		expect(csvCell('-12.50')).toBe('-12.50');
 		expect(csvCell('450')).toBe('450');
 		expect(csvCell(-5)).toBe('-5');

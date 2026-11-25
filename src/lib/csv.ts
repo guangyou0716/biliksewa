@@ -3,11 +3,12 @@
  *
  * Formula injection guard: a text cell starting with `=`, `+`, `-`, `@`, tab or carriage return could be
  * run as a formula by Excel, LibreOffice or Google Sheets (e.g. a tenant named `=HYPERLINK(...)`), so it
- * is prefixed with `'` and shown as plain text. Plain numbers such as `-12.50` are left alone: they
- * cannot be formulas and stay usable as numbers.
+ * is prefixed with `'` and shown as plain text. Leading spaces before those characters and the
+ * full-width forms `＝＋－＠` (which some spreadsheet apps also accept) are caught too. Plain numbers such
+ * as `-12.50` are left alone: they cannot be formulas and stay usable as numbers.
  */
 
-const FORMULA_START = /^[=+\-@\t\r]/;
+const FORMULA_START = /^[\t\r]|^\s*[=+\-@\uFF1D\uFF0B\uFF0D\uFF20]/;
 const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
 
 export type CsvValue = string | number | null | undefined;

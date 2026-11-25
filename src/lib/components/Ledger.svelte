@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { formatRM } from '#lib/money.ts';
+	import { methodKey } from '#lib/i18n.ts';
+	import { t } from '#lib/i18n.svelte.ts';
 
 	interface Charge {
 		id: number;
@@ -30,22 +32,15 @@
 	} = $props();
 
 	const uid = $props.id();
-	const methodLabel: Record<string, string> = {
-		cash: 'Cash',
-		bank_transfer: 'Bank transfer',
-		other: 'Other',
-		deposit: 'From deposit'
-	};
 </script>
 
 <section class="card overflow-x-auto" aria-labelledby="{uid}-charges">
-	<h2 id="{uid}-charges" class="font-semibold">Charges</h2>
+	<h2 id="{uid}-charges" class="font-semibold">{t('ledger.charges')}</h2>
 	<table class="mt-3 table">
 		<thead>
 			<tr>
-				<th>Due</th><th>Description</th><th class="text-right">Amount</th><th class="text-right">
-					Unpaid
-				</th>
+				<th>{t('col.due')}</th><th>{t('col.description')}</th>
+				<th class="text-right">{t('col.amount')}</th><th class="text-right">{t('col.unpaid')}</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -56,7 +51,7 @@
 					<td class="text-right tabular-nums">{formatRM(c.amountSen)}</td>
 					<td class="text-right tabular-nums">
 						{#if c.unpaidSen === 0}
-							<span class="badge bg-brand-100 text-brand-700">Paid</span>
+							<span class="badge bg-brand-100 text-brand-700">{t('ledger.paid')}</span>
 						{:else}
 							<span class={c.dueDate < today ? 'font-medium text-amber-700' : ''}>
 								{formatRM(c.unpaidSen)}
@@ -65,26 +60,27 @@
 					</td>
 				</tr>
 			{:else}
-				<tr><td colspan="4" class="text-slate-500">No charges yet.</td></tr>
+				<tr><td colspan="4" class="text-slate-500">{t('ledger.noCharges')}</td></tr>
 			{/each}
 		</tbody>
 	</table>
 </section>
 
 <section class="card overflow-x-auto" aria-labelledby="{uid}-payments">
-	<h2 id="{uid}-payments" class="font-semibold">Payments</h2>
+	<h2 id="{uid}-payments" class="font-semibold">{t('ledger.payments')}</h2>
 	<table class="mt-3 table">
 		<thead>
 			<tr>
-				<th>Paid on</th><th>Method</th><th>Reference</th><th class="text-right">Amount</th>
-				{#if receiptHref}<th><span class="sr-only">Receipt</span></th>{/if}
+				<th>{t('col.paidOn')}</th><th>{t('col.method')}</th><th>{t('col.reference')}</th>
+				<th class="text-right">{t('col.amount')}</th>
+				{#if receiptHref}<th><span class="sr-only">{t('col.receipt')}</span></th>{/if}
 			</tr>
 		</thead>
 		<tbody>
 			{#each payments as p (p.id)}
 				<tr>
 					<td class="text-slate-500">{p.paidOn}</td>
-					<td>{methodLabel[p.method]}</td>
+					<td>{t(methodKey(p.method))}</td>
 					<td class="text-slate-500">{p.reference ?? '—'}</td>
 					<td class="text-right tabular-nums">{formatRM(p.amountSen)}</td>
 					{#if receiptHref}
@@ -92,16 +88,19 @@
 							<a
 								class="text-brand-700 hover:underline"
 								href={receiptHref(p.id)}
-								aria-label="Receipt for {formatRM(p.amountSen)} paid on {p.paidOn}"
+								aria-label={t('receipt.linkLabel', {
+									amount: formatRM(p.amountSen),
+									date: p.paidOn
+								})}
 							>
-								Receipt
+								{t('receipt.link')}
 							</a>
 						</td>
 					{/if}
 				</tr>
 			{:else}
 				<tr>
-					<td colspan={receiptHref ? 5 : 4} class="text-slate-500">No payments yet.</td>
+					<td colspan={receiptHref ? 5 : 4} class="text-slate-500">{t('ledger.noPayments')}</td>
 				</tr>
 			{/each}
 		</tbody>

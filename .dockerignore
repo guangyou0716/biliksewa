@@ -1,0 +1,15 @@
+.git
+.github
+node_modules
+build
+seed
+.svelte-kit
+.wrangler
+dist-demo
+test-results
+playwright-report
+docs
+*.db
+*.db-*
+.env
+.env.*

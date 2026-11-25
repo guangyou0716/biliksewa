@@ -4,6 +4,7 @@ import { db } from '#lib/server/db/index.ts';
 import { text } from '#lib/server/forms.ts';
 import { loginByAddress, loginByEmail, minutes } from '#lib/server/rate-limit.ts';
 import { safeNext } from '#lib/safe-next.ts';
+import { translate } from '#lib/i18n.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, url }) => {
@@ -11,7 +12,7 @@ export const load: PageServerLoad = ({ locals, url }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies, url, getClientAddress }) => {
+	default: async ({ request, cookies, url, getClientAddress, locals }) => {
 		const data = await request.formData();
 		const email = text(data, 'email');
 		const address = getClientAddress();
@@ -21,14 +22,14 @@ export const actions: Actions = {
 		if (wait > 0) {
 			return fail(429, {
 				email,
-				error: `Too many failed sign-ins. Try again in ${minutes(wait)} min.`
+				error: translate(locals.locale, 'login.tooMany', { minutes: minutes(wait) })
 			});
 		}
 		const found = await authenticate(db, email, text(data, 'password'));
 		if (!found) {
 			loginByEmail.fail(emailKey);
 			loginByAddress.fail(address);
-			return fail(400, { email, error: 'Wrong email or password' });
+			return fail(400, { email, error: translate(locals.locale, 'login.wrong') });
 		}
 		loginByEmail.reset(emailKey);
 		const { token, expiresAt } = createSession(db, found.id);

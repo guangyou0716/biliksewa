@@ -1,11 +1,14 @@
 <script lang="ts">
 	import Receipt from '#lib/components/Receipt.svelte';
+	import { t } from '#lib/i18n.svelte.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 </script>
 
-<svelte:head><title>Receipt {data.receipt.number} · biliksewa</title></svelte:head>
+<svelte:head>
+	<title>{t('receipt.pageTitle', { number: data.receipt.number })} · biliksewa</title>
+</svelte:head>
 
-<a href="/portal" class="text-sm text-brand-700 hover:underline print:hidden">← My rent</a>
+<a href="/portal" class="text-sm text-brand-700 hover:underline print:hidden">{t('portal.back')}</a>
 <Receipt receipt={data.receipt} />

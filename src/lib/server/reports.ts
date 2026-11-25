@@ -3,6 +3,7 @@ import { allocatePayments } from '../billing';
 import { toCsv, senToDecimal } from '../csv';
 import { monthRange } from '../dates';
 import { daysOverdue, reminderMessage } from '../reminder';
+import { DEFAULT_LOCALE, translate, type Locale } from '../i18n';
 import type { DB } from './db/client';
 import { bed, charge, payment, property, room, tenancy, tenant, user } from './db/schema';
 import { receiptNumber } from './portal';
@@ -302,9 +303,14 @@ export function paymentsCsv(db: DB, ownerId: number, period?: string): string {
 /**
  * Who owes what on the landlord's properties: every tenancy with charges past their due date that
  * payments (applied oldest first) have not covered, most days overdue first, each with a ready-to-copy
- * reminder message. Nothing is ever sent from here.
+ * reminder message in `locale`. Nothing is ever sent from here.
  */
-export function overdueReminders(db: DB, ownerId: number, today: string) {
+export function overdueReminders(
+	db: DB,
+	ownerId: number,
+	today: string,
+	locale: Locale = DEFAULT_LOCALE
+) {
 	return ownerStays(db, ownerId)
 		.map((s) => {
 			const ledger = ledgerEntries(db, s.tenancy.id, today);
@@ -317,7 +323,8 @@ export function overdueReminders(db: DB, ownerId: number, today: string) {
 					unpaidSen: c.unpaidSen,
 					daysOverdue: daysOverdue(c.dueDate, today)
 				}));
-			const where = `${s.propertyName}, ${s.roomName}, Bed ${s.bedLabel}`;
+			const bed = translate(locale, 'common.bed', { label: s.bedLabel });
+			const where = `${s.propertyName}, ${s.roomName}, ${bed}`;
 			return {
 				tenancyId: s.tenancy.id,
 				tenantName: s.tenantName,
@@ -334,7 +341,8 @@ export function overdueReminders(db: DB, ownerId: number, today: string) {
 					landlordName: s.landlordName,
 					where,
 					today,
-					items
+					items,
+					locale
 				})
 			};
 		})

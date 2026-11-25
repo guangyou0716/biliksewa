@@ -3,6 +3,7 @@ import { FormError, date, guard, id, text } from '#lib/server/forms.ts';
 import { formatKwh, parseKwh } from '#lib/meter.ts';
 import { readPhoto, submitReading, tenantMeter } from '#lib/server/meter.ts';
 import { tenantHome } from '#lib/server/portal.ts';
+import { translate } from '#lib/i18n.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => ({
@@ -30,7 +31,9 @@ export const actions: Actions = {
 				},
 				locals.today
 			);
-			return { success: `Reading of ${formatKwh(r.readingTenths)} sent to your landlord` };
+			return {
+				success: translate(locals.locale, 'portal.readingSent', { kwh: formatKwh(r.readingTenths) })
+			};
 		});
 	}
 };

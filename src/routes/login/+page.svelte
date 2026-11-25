@@ -1,25 +1,28 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import FormMessage from '#lib/components/FormMessage.svelte';
+	import LocalePicker from '#lib/components/LocalePicker.svelte';
+	import { t } from '#lib/i18n.svelte.ts';
 	import type { PageProps } from './$types';
 
 	let { form }: PageProps = $props();
 </script>
 
-<svelte:head><title>Sign in · biliksewa</title></svelte:head>
+<svelte:head><title>{t('login.title')} · biliksewa</title></svelte:head>
 
 <main
 	class="grid min-h-screen place-items-center bg-gradient-to-br from-brand-50 to-slate-100 px-4"
 >
 	<div class="card w-full max-w-sm">
-		<h1 class="text-xl font-semibold text-brand-900">biliksewa</h1>
-		<p class="mt-1 text-sm text-slate-500">
-			Room &amp; bed rental for landlords and their tenants. Sign in to continue.
-		</p>
+		<div class="flex items-start justify-between gap-2">
+			<h1 class="text-xl font-semibold text-brand-900">biliksewa</h1>
+			<LocalePicker class="-mt-1 -mr-2" />
+		</div>
+		<p class="mt-1 text-sm text-slate-500">{t('login.intro')}</p>
 		<form method="POST" use:enhance class="mt-5 space-y-4">
 			<FormMessage error={form?.error} />
 			<label class="label">
-				Email
+				{t('login.email')}
 				<input
 					class="field"
 					type="email"
@@ -30,7 +33,7 @@
 				/>
 			</label>
 			<label class="label">
-				Password
+				{t('login.password')}
 				<input
 					class="field"
 					type="password"
@@ -39,15 +42,14 @@
 					required
 				/>
 			</label>
-			<button class="btn w-full">Sign in</button>
+			<button class="btn w-full">{t('login.submit')}</button>
 		</form>
 		<p class="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
-			Demo accounts (synthetic data):<br />
-			Landlord <code>demo@biliksewa.test</code> / <code>demo-landlord</code><br />
-			Tenant <code>tenant@biliksewa.test</code> / <code>demo-tenant</code>
+			{t('login.demoAccounts')}<br />
+			{t('common.landlord')} <code>demo@biliksewa.test</code> / <code>demo-landlord</code><br />
+			{t('common.tenant')} <code>tenant@biliksewa.test</code> / <code>demo-tenant</code>
 			{#if import.meta.env.VITE_PUBLIC_DEMO}
-				<br />This is a public demo. Anyone can change the data, and it goes back to the sample data
-				every hour.
+				<br />{t('login.publicDemo')}
 			{/if}
 		</p>
 	</div>

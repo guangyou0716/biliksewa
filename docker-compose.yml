@@ -1,0 +1,20 @@
+# Self-hosted biliksewa (Node build) with the SQLite database on a named volume.
+#   docker compose up -d --build   then open http://localhost:3000
+# ORIGIN must be the URL people type in the browser (SvelteKit checks it on form posts).
+services:
+  app:
+    build: .
+    image: biliksewa:local
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      ORIGIN: ${BILIKSEWA_ORIGIN:-http://localhost:3000}
+      DATABASE_URL: /data/biliksewa.db
+      # 1 = fill an empty database with the synthetic demo accounts on first start. Set to 0 for real use.
+      BILIKSEWA_SEED_DEMO: ${BILIKSEWA_SEED_DEMO:-1}
+    volumes:
+      - biliksewa-data:/data
+
+volumes:
+  biliksewa-data:

@@ -13,7 +13,7 @@ export const GET: RequestHandler = ({ locals, params, url }) => {
 	const period = monthParam(url, monthOf(locals.today));
 	try {
 		const s = landlordStatement(db, locals.user.id, id(params.id), period);
-		return statementDownload(s, locals.today);
+		return statementDownload(s, locals.today, locals.locale);
 	} catch (e) {
 		if (e instanceof RentalError) error(404, 'Not found');
 		throw e;
