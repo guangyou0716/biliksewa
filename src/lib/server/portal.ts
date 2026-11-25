@@ -7,6 +7,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { hashPassword, hashToken, MIN_PASSWORD_LENGTH, type SessionUser } from './auth';
 import type { DB } from './db/client';
 import { bed, payment, property, room, tenancy, tenant, tenantInvite, user } from './db/schema';
+import { depositSettlementOf } from './deposit';
 import { ledgerEntries, ownedTenancy, RentalError } from './rentals';
 import { todayInMalaysia } from './today';
 
@@ -154,6 +155,7 @@ export function tenantHome(db: DB, userId: number, today: string) {
 		.map((r) => ({
 			...r,
 			active: r.tenancy.endDate === null || r.tenancy.endDate > today,
+			deposit: depositSettlementOf(db, r.tenancy.id),
 			...ledgerEntries(db, r.tenancy.id, today)
 		}));
 }

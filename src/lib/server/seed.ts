@@ -2,6 +2,7 @@ import { addDays, monthOf, monthRange } from '../dates';
 import { hashPassword } from './auth';
 import type { DB } from './db/client';
 import { eq } from 'drizzle-orm';
+import { settleDeposit } from './deposit';
 import { tenancy, tenant, user } from './db/schema';
 import {
 	addBed,
@@ -160,6 +161,20 @@ export async function seedDemo(db: DB, today: string) {
 	const settle = (name: string) => tenancyLedger(db, o, t[name], today).balanceSen;
 	pay('Aina Sofea', settle('Aina Sofea'), `${thisMonth}-01`, 'bank_transfer', 'DEMO-TRF-1007');
 	pay('Hafiz Danial', settle('Hafiz Danial'), `${thisMonth}-01`, 'cash');
+
+	// Farah's deposit was settled two days after she left: cleaning deducted, the rest refunded.
+	settleDeposit(
+		db,
+		o,
+		t['Farah Hani'],
+		{
+			settledOn: `${lastMonth}-12`,
+			deductions: [{ label: 'Room cleaning', amountSen: 5000 }],
+			refundMethod: 'bank_transfer',
+			refundReference: 'DEMO-REFUND-2001'
+		},
+		today
+	);
 
 	// Priya already accepted her invite, so visitors can sign in to the tenant portal.
 	const priya = db

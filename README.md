@@ -16,7 +16,13 @@ change the demo data, and it goes back to the sample data every hour.
 
 - **Properties, rooms and beds** on one board with occupancy; add rooms and beds.
 - **Move in / move out** per bed. A bed can't have overlapping tenancies (the next tenant may start on the
-  move-out day). Moving out re-pro-rates rent that was already billed.
+  move-out day). A move-out recorded late corrects what was already billed: rent is re-pro-rated, and every
+  split house bill whose period runs past the move-out is split again by the nights actually stayed, over
+  the same tenants, so it still adds up to the sen (housemates' shares go up accordingly).
+- **Deposit settlement** after move-out: up to 5 deductions (cleaning, repairs...) with a live preview.
+  The deposit pays the deductions first, then any unpaid rent and bills (recorded as one "from deposit"
+  payment that is not counted as cash collected), and the rest is the refund. Settled once per tenancy;
+  the tenant sees the same breakdown in the portal.
 - **Monthly rent** generated once per tenancy per month, pro-rated by nights. Running it twice does nothing;
   a partial unique index in the database enforces this too.
 - **House bill split** (electricity, water, internet) by nights stayed, with a preview. Shares use the largest
@@ -36,6 +42,7 @@ change the demo data, and it goes back to the sample data every hour.
 ![Property board](docs/property-board.png)
 ![Bill split](docs/bill-split.png)
 ![Tenant portal](docs/tenant-portal.png)
+![Deposit settlement](docs/deposit-settlement.png)
 
 ## Stack
 

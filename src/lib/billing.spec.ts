@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { allocatePayments, overdueSen, proratedRent, splitByNights } from './billing';
+import {
+	allocatePayments,
+	overdueSen,
+	proratedRent,
+	settlementAmounts,
+	splitByNights
+} from './billing';
 
 describe('proratedRent', () => {
 	it('bills the exact monthly rent for a full month', () => {
@@ -104,5 +110,38 @@ describe('allocatePayments / overdueSen', () => {
 
 	it('a charge due today is not overdue yet', () => {
 		expect(overdueSen(charges, 0, '2026-09-07')).toBe(0);
+	});
+});
+
+describe('settlementAmounts', () => {
+	it('pays deductions and unpaid charges from the deposit and refunds the rest', () => {
+		expect(settlementAmounts(60000, 5000, 9000)).toEqual({
+			appliedSen: 14000,
+			refundSen: 46000,
+			balanceAfterSen: 0
+		});
+	});
+
+	it('never uses more than the deposit and reports what is still owed', () => {
+		expect(settlementAmounts(30000, 10000, 50000)).toEqual({
+			appliedSen: 30000,
+			refundSen: 0,
+			balanceAfterSen: 30000
+		});
+	});
+
+	it('uses existing credit before the deposit', () => {
+		// Tenant overpaid RM 20; a RM 50 deduction only needs RM 30 from the deposit.
+		expect(settlementAmounts(40000, 5000, -2000)).toEqual({
+			appliedSen: 3000,
+			refundSen: 37000,
+			balanceAfterSen: 0
+		});
+		// Credit larger than the deductions stays as credit; the deposit is refunded in full.
+		expect(settlementAmounts(40000, 0, -2000)).toEqual({
+			appliedSen: 0,
+			refundSen: 40000,
+			balanceAfterSen: -2000
+		});
 	});
 });
